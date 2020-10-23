@@ -3,7 +3,6 @@ using Unity.Entities;
 using Unity.Jobs;
 using Zephyr.GOAP.Component;
 using Zephyr.GOAP.Component.ActionNodeState;
-using Zephyr.GOAP.Struct;
 
 namespace Zephyr.GOAP.System
 {
@@ -15,7 +14,7 @@ namespace Zephyr.GOAP.System
 
         public EntityCommandBufferSystem EcbSystem;
 
-        private NativeString32 _nameOfAction;
+        private FixedString32 _nameOfAction;
 
         protected override void OnCreate()
         {
@@ -33,9 +32,9 @@ namespace Zephyr.GOAP.System
             var waitingNodeEntities = _waitingActionNodeQuery.ToEntityArray(Allocator.TempJob);
             var waitingNodes =
                 _waitingActionNodeQuery.ToComponentDataArray<Node>(Allocator.TempJob);
-            var waitingStates = GetBufferFromEntity<State>();
+            var waitingStates = GetBufferFromEntity<State>(true);
 
-            var ecb = EcbSystem.CreateCommandBuffer().ToConcurrent();
+            var ecb = EcbSystem.CreateCommandBuffer().AsParallelWriter();
 
             var handle = ExecuteActionJob(_nameOfAction, waitingNodeEntities, waitingNodes,
                 waitingStates, ecb, inputDeps);
@@ -49,10 +48,10 @@ namespace Zephyr.GOAP.System
             return handle2;
         }
 
-        protected abstract JobHandle ExecuteActionJob(NativeString32 nameOfAction,
+        protected abstract JobHandle ExecuteActionJob(FixedString32 nameOfAction,
             NativeArray<Entity> waitingNodeEntities,
-            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates,
-            EntityCommandBuffer.Concurrent ecb, JobHandle inputDeps);
+            NativeArray<Node> waitingNodes, [ReadOnly]BufferFromEntity<State> waitingStates,
+            EntityCommandBuffer.ParallelWriter ecb, JobHandle inputDeps);
 
         /// <summary>
         /// 额外一个job，有的会需要
@@ -64,14 +63,14 @@ namespace Zephyr.GOAP.System
         /// <param name="ecb"></param>
         /// <param name="inputDeps"></param>
         /// <returns></returns>
-        protected virtual JobHandle ExecuteActionJob2(NativeString32 nameOfAction,
+        protected virtual JobHandle ExecuteActionJob2(FixedString32 nameOfAction,
             NativeArray<Entity> waitingNodeEntities,
-            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates,
-            EntityCommandBuffer.Concurrent ecb, JobHandle inputDeps)
+            NativeArray<Node> waitingNodes, [ReadOnly]BufferFromEntity<State> waitingStates,
+            EntityCommandBuffer.ParallelWriter ecb, JobHandle inputDeps)
         {
             return inputDeps;
         }
 
-        protected abstract NativeString32 GetNameOfAction();
+        protected abstract FixedString32 GetNameOfAction();
     }
 }

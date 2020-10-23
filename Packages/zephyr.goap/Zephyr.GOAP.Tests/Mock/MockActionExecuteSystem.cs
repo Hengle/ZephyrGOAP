@@ -11,15 +11,15 @@ namespace Zephyr.GOAP.Tests.Mock
     [DisableAutoCreation]
     public class MockActionExecuteSystem : ActionExecuteSystemBase
     {
-        protected override JobHandle ExecuteActionJob(NativeString32 nameOfAction, NativeArray<Entity> waitingNodeEntities,
-            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates, EntityCommandBuffer.Concurrent ecb, JobHandle inputDeps)
+        protected override JobHandle ExecuteActionJob(FixedString32 nameOfAction, NativeArray<Entity> waitingNodeEntities,
+            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates, EntityCommandBuffer.ParallelWriter ecb, JobHandle inputDeps)
         {
             return Entities.WithName("PickRawActionExecuteJob")
                 .WithAll<ReadyToAct>()
                 .WithDeallocateOnJobCompletion(waitingNodeEntities)
                 .WithDeallocateOnJobCompletion(waitingNodes)
                 .ForEach((Entity agentEntity, int entityInQueryIndex,
-                    in Agent agent, in MockAction action) =>
+                    in Agent agent, in MockProduceAction action) =>
                 {
                     for (var i = 0; i < waitingNodeEntities.Length; i++)
                     {
@@ -33,21 +33,21 @@ namespace Zephyr.GOAP.Tests.Mock
 
                         //通知执行完毕
                         Utils.NextAgentState<ReadyToAct, ActDone>(agentEntity, entityInQueryIndex,
-                            ref ecb, nodeEntity);
+                            ecb, nodeEntity);
 
                         //node指示执行完毕 
                         Utils.NextActionNodeState<ActionNodeActing, ActionNodeDone>(nodeEntity,
                             entityInQueryIndex,
-                            ref ecb, agentEntity);
+                            ecb, agentEntity);
                         break;
                     }
                 }).Schedule(inputDeps);
             ;
         }
 
-        protected override NativeString32 GetNameOfAction()
+        protected override FixedString32 GetNameOfAction()
         {
-            return nameof(MockAction);
+            return nameof(MockProduceAction);
         }
     }
 }

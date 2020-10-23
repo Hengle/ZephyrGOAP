@@ -23,8 +23,8 @@
 //             var goalState = new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(ItemContainerTrait),
-//                 ValueTrait = typeof(FoodTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
+//                 ValueTrait = TypeManager.GetTypeIndex<FoodTrait>(),
 //             };
 //
 //             EntityManager.AddComponentData(_goalEntity, new Goal
@@ -41,18 +41,18 @@
 //             var stateBuffer = EntityManager.AddBuffer<State>(_agentEntity);
 //             stateBuffer.Add(goalState);
 //             
-//             //给CurrentStates写入假环境数据：自己有原料、世界里有cooker和recipe
-//             var buffer = EntityManager.GetBuffer<State>(CurrentStatesHelper.CurrentStatesEntity);
+//             //给BaseStates写入假环境数据：自己有原料、世界里有cooker和recipe
+//             var buffer = EntityManager.GetBuffer<State>(BaseStatesHelper.BaseStatesEntity);
 //             buffer.Add(new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(ItemContainerTrait),
-//                 ValueString = Utils.RawPeachName,
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
+//                 ValueString = StringTable.Instance().RawPeachName,
 //             });
 //             buffer.Add(new State
 //             {
 //                 Target = new Entity{Index = 9, Version = 1},
-//                 Trait = typeof(CookerTrait),
+//                 Trait = TypeManager.GetTypeIndex<CookerTrait>(),
 //             });
 //             var recipeSensorSystem = World.GetOrCreateSystem<RecipeSensorSystem>();
 //             recipeSensorSystem.Update();

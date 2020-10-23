@@ -18,15 +18,17 @@ namespace Zephyr.GOAP.Logger
         public string valueString;
         public string valueTrait;
         public bool isNegative;
+        public int amount;
 
         public StateLog(EntityManager entityManager, State state)
         {
             target = new EntityLog(entityManager, state.Target);
             position = state.Position;
-            if(state.Trait!=default)trait = state.Trait.ToString();
+            if(state.Trait!=default)trait = TypeManager.GetType(state.Trait).Name;
             valueString = state.ValueString.ToString();
-            if(state.ValueTrait!=default)valueTrait = state.ValueTrait.ToString();
+            if(state.ValueTrait!=default)valueTrait = TypeManager.GetType(state.ValueTrait).Name;
             isNegative = state.IsNegative;
+            amount = state.Amount;
         }
 
         public static StateLog[] CreateStateLogs(EntityManager entityManager, State[] states)
@@ -37,8 +39,8 @@ namespace Zephyr.GOAP.Logger
         }
 
         public static StateLog[] CreateStateLogs(EntityManager entityManager, 
-            int nodeHash, ref NativeList<int> stateIndices,
-            ref NativeList<State> states)
+            int nodeHash, NativeList<int> stateIndices,
+            NativeList<State> states)
         {
             var stateLogs = new List<StateLog>();
             for (var i = 0; i < stateIndices.Length; i++)
@@ -74,13 +76,14 @@ namespace Zephyr.GOAP.Logger
         public override string ToString()
         {
             var negative = isNegative ? "-" : "+";
-            var trait = string.IsNullOrEmpty(this.trait) ? "" : $"({this.trait})";
-            var valueTrait = string.IsNullOrEmpty(this.valueTrait) ? "" : $"<{this.valueTrait}>";
-            var position = target.Equals(Entity.Null)
+            var traitText = string.IsNullOrEmpty(trait) ? "" : $"({trait})";
+            var valueTraitText = string.IsNullOrEmpty(valueTrait) ? "" : $"<{valueTrait}>";
+            var positionText = target.Equals(Entity.Null)
                 ? ""
-                : $"({this.position.x},{this.position.y},{this.position.z})";
+                : $"({position.x},{position.y},{position.z})";
+            var amountText = amount == 0 ? "" : $"*{amount}";
 
-            return $"{negative}[{target}]{trait}{valueTrait}{valueString}{position}";
+            return $"{negative}[{target}]{traitText}{valueTraitText}{valueString}{positionText}{amountText}";
         }
 
         /// <summary>
@@ -93,11 +96,11 @@ namespace Zephyr.GOAP.Logger
             return target.Equals(state.Target) &&
                    (state.Trait == default
                        ? string.IsNullOrEmpty(trait)
-                       : trait.Equals(state.Trait.ToString())) &&
+                       : trait.Equals(TypeManager.GetType(state.Trait).Name)) &&
                    valueString.Equals(state.ValueString.ToString()) &&
                    (state.ValueTrait == default
                        ? string.IsNullOrEmpty(valueTrait)
-                       : valueTrait.Equals(state.ValueTrait.ToString())) &&
+                       : valueTrait.Equals(TypeManager.GetType(state.ValueTrait).Name)) &&
                    isNegative == state.IsNegative;
         }
     }

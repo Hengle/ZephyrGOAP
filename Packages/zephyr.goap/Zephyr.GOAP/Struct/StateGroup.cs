@@ -8,9 +8,8 @@ using Zephyr.GOAP.Lib;
 
 namespace Zephyr.GOAP.Struct
 {
-    public struct StateGroup : IDisposable, IEnumerable<State>
+    public struct StateGroup : IDisposable, IEnumerable<State>, IEquatable<StateGroup>
     {
-        [NativeDisableParallelForRestriction]
         private NativeList<State> _states;
         
         public StateGroup(int initialCapacity, Allocator allocator)
@@ -25,6 +24,16 @@ namespace Zephyr.GOAP.Struct
             for (var i = 0; i < copyFrom._states.Length; i++)
             {
                 var state = copyFrom._states[i];
+                _states.Add(state);
+            }
+        }
+        
+        public StateGroup(NativeList<State> copyFrom, Allocator allocator)
+        {
+            _states = new NativeList<State>(copyFrom.Length, allocator);
+            for (var i = 0; i < copyFrom.Length; i++)
+            {
+                var state = copyFrom[i];
                 _states.Add(state);
             }
         }
@@ -55,33 +64,55 @@ namespace Zephyr.GOAP.Struct
         /// <param name="copyFrom"></param>
         /// <param name="length"></param>
         /// <param name="allocator"></param>
-        public StateGroup(StateGroup copyFrom, int length, Allocator allocator)
+        public StateGroup(NativeArray<State> copyFrom, int length, Allocator allocator)
         {
             _states = new NativeList<State>(length, allocator);
             for (var i = 0; i < length; i++)
             {
-                var state = copyFrom._states[i];
+                var state = copyFrom[i];
                 _states.Add(state);
             }
         }
-        
-        public StateGroup(NativeMinHeap<State> copyFrom, int length, Allocator allocator)
+
+        /// <summary>
+        /// 只拷贝来源的前几个state
+        /// </summary>
+        /// <param name="copyFrom"></param>
+        /// <param name="nodeHash"></param>
+        /// <param name="length"></param>
+        /// <param name="allocator"></param>
+        public StateGroup(NativeList<ZephyrValueTuple<int, State>> copyFrom, int nodeHash, int length, Allocator allocator)
         {
             _states = new NativeList<State>(length, allocator);
-            for (var i = 0; i < length; i++)
+            var pCopied = 0;
+            for (var stateId = 0; stateId < copyFrom.Length; stateId++)
             {
-                var found = copyFrom.Pop();
-                var state = copyFrom[found].Content;
+                var (aNodeHash, state) = copyFrom[stateId];
+                if (!aNodeHash.Equals(nodeHash)) continue;
+                _states.Add(state);
+                pCopied++;
+                if (pCopied >= length) break;
+            }
+        }
+        
+        public StateGroup(NativeList<ZephyrValueTuple<int, State>> copyFrom, int nodeHash, Allocator allocator)
+        {
+            _states = new NativeList<State>(copyFrom.Length, allocator);
+            for (var stateId = 0; stateId < copyFrom.Length; stateId++)
+            {
+                var (aNodeHash, state) = copyFrom[stateId];
+                if (!aNodeHash.Equals(nodeHash)) continue;
                 _states.Add(state);
             }
         }
         
-        public StateGroup(ref DynamicBuffer<State> statesBuffer,
+        public StateGroup(DynamicBuffer<State> statesBuffer,
             Allocator allocator)
         {
             _states = new NativeList<State>(statesBuffer.Length, allocator);
-            foreach (var state in statesBuffer)
+            for (var i = 0; i < statesBuffer.Length; i++)
             {
+                var state = statesBuffer[i];
                 _states.Add(state);
             }
         }
@@ -116,109 +147,205 @@ namespace Zephyr.GOAP.Struct
             _states.Add(state);
         }
 
+        public void RemoveAtSwapBack(int index)
+        {
+            _states.RemoveAtSwapBack(index);
+        }
+
         /// <summary>
-        /// Equal或双向Belong则无视，不同项则增加
+        /// 表示对左侧期望的满足计算，因此结构只有1种可能：
+        /// 期望 MINUS 实现
+        /// 会移除掉左侧满足的State，可数的减数量，不可数的移除
+        /// 右边不会变化
         /// </summary>
         /// <param name="other"></param>
-        /// <returns></returns>
-        public void Merge(StateGroup other)
+        /// <param name="outputChangedOtherStates">是否输出右侧符合了左边的state，不可数不会被输出</param>
+        /// <param name="allocator"></param>
+        public StateGroup MINUS(StateGroup other, bool outputChangedOtherStates = false, Allocator allocator = Allocator.Temp)
         {
-            //todo 还需要考虑冲突可能，即针对同一个目标的两个state不相容
-            for (var i = 0; i < other._states.Length; i++)
+            StateGroup changedOtherStates = default;
+            if (outputChangedOtherStates)
             {
-                var otherState = other._states[i];
-                var contained = false;
-                for (var j = 0; j < _states.Length; j++)
+                changedOtherStates = new StateGroup(3, allocator);
+            }
+            
+            for (var thisId = Length() - 1; thisId >= 0; thisId--)
+            {
+                var thisState = this[thisId];
+
+                for (var otherId = other.Length() - 1; otherId >= 0; otherId--)
                 {
-                    var state = _states[j];
-                    if (state.Equals(otherState)
-                        || state.BelongTo(otherState) || otherState.BelongTo(state))
+                    var otherState = other[otherId];
+
+                    if (thisState.IsCountable())
                     {
+                        var thisStateRemoved = false;
+                        if (!thisState.SameTo(otherState) && !otherState.BelongTo(thisState))
+                            continue;
+                        if (otherState.Amount>=thisState.Amount)
+                        {
+                            if (outputChangedOtherStates)
+                            {
+                                var changedOther = otherState;
+                                changedOther.Amount = thisState.Amount;
+                                changedOtherStates.Add(changedOther);
+                            }
+                            _states.RemoveAtSwapBack(thisId);
+                            thisStateRemoved = true;
+                        }
+                        else
+                        {
+                            thisState.Amount -= otherState.Amount;
+                            _states[thisId] = thisState;
+                            if (outputChangedOtherStates)
+                            {
+                                changedOtherStates.Add(otherState);
+                            }
+                        }
+
+                        if (thisStateRemoved) break;
+                    }
+                    else
+                    {
+                        //不可数
+                        if (!thisState.Equals(otherState) && !otherState.BelongTo(thisState))
+                            continue;
+                        _states.RemoveAtSwapBack(thisId);
+                        break;
+                    }
+                }
+            }
+
+            return changedOtherStates;
+        }
+        
+        /// <summary>
+        /// 左右累加，因此2种可能：
+        /// 期望OR期望，实现OR实现
+        /// </summary>
+        /// <param name="other"></param>
+        public void OR([ReadOnly]StateGroup other)
+        {
+            for (var otherId = 0; otherId < other.Length(); otherId++)
+            {
+                var otherState = other[otherId];
+                OR(otherState);
+            }
+        }
+
+        /// <summary>
+        /// 累加一个state
+        /// </summary>
+        /// <param name="other"></param>
+        public void OR([ReadOnly] State other)
+        {
+            var contained = false;
+            for (var thisId = 0; thisId < Length(); thisId++)
+            {
+                var thisState = this[thisId];
+
+                if (other.IsCountable())
+                {
+                    //可数
+                    if (!thisState.SameTo(other)) continue;
+                        
+                    //找到了则直接增加数量
+                    contained = true;
+                    thisState.Amount += other.Amount;
+                    this[thisId] = thisState;
+                    break;
+                }
+                else
+                {
+                    //不可数
+                    if (!thisState.Equals(other)) continue;
+                        
+                    contained = true;
+                    break;
+                }
+            }
+            //左侧找不到相同项时需要追加
+            if(!contained)Add(other);
+        }
+
+        /// <summary>
+        /// 左右求交集，因此2种可能
+        /// 期望AND期望，实现AND实现
+        /// </summary>
+        /// <param name="other"></param>
+        public void AND([ReadOnly]StateGroup other)
+        {
+            for (var thisId = Length() - 1; thisId >= 0; thisId--)
+            {
+                var thisState = this[thisId];
+                var contained = false;
+                for (var otherId = 0; otherId < other.Length(); otherId++)
+                {
+                    var otherState = other[otherId];
+
+                    if (otherState.IsCountable())
+                    {
+                        //可数，要取数量较小的一方
+                        if (!thisState.SameTo(otherState)) continue;
+
+                        contained = true;
+                        if (thisState.Amount > otherState.Amount)
+                        {
+                            thisState.Amount = otherState.Amount;
+                            this[thisId] = thisState;
+                        }
+                        break;
+                    }
+                    else
+                    {
+                        //不可数
+                        if (!thisState.Equals(otherState)) continue;
+
                         contained = true;
                         break;
                     }
                 }
-
-                if (!contained) _states.Add(otherState);
+                //右侧找不到相同项时，需移除
+                if(!contained)RemoveAtSwapBack(thisId);
             }
-        }
-
-        /// <summary>
-        /// Equal或双向Belong则移除，不同项则无视
-        /// 如果出现移除，effect需要记录被自己移除的state信息
-        /// </summary>
-        /// <param name="effectStates"></param>
-        /// <returns></returns>
-        public void SubForEffect(ref StateGroup effectStates)
-        {
-            Sub(ref effectStates, out var removedStates, Allocator.Temp);
-            removedStates.Dispose();
-        }
-
-        /// <summary>
-        /// Equal或双向Belong则移除，不同项则无视
-        /// </summary>
-        /// <param name="other"></param>
-        /// <param name="removedStates"></param>
-        /// <param name="allocatorForRemovedStates"></param>
-        /// <param name="func"></param>
-        /// <returns></returns>
-        public void Sub(ref StateGroup other, out StateGroup removedStates,
-            Allocator allocatorForRemovedStates, Func<State, State, State> func = null)
-        {
-            removedStates = new StateGroup(1, allocatorForRemovedStates);
-            
-            for (var i = 0; i < other._states.Length; i++)
-            {
-                var otherState = other._states[i];
-                for (var j = _states.Length - 1; j >= 0; j--)
-                {
-                    var state = _states[j];
-                    if (state.Equals(otherState)
-                        || state.BelongTo(otherState) || otherState.BelongTo(state))
-                    {
-                        if (func != null)
-                        {
-                            otherState = func(state, otherState);
-                            other[i] = otherState;
-                        }
-                        _states.RemoveAtSwapBack(j);
-                        removedStates.Add(state);
-                    }
-                }
-            }
+                
         }
 
         public State GetState(Func<State, bool> compare)
         {
-            foreach (var state in _states)
+            for (var i = 0; i < _states.Length; i++)
             {
+                var state = _states[i];
                 if (compare(state)) return state;
             }
-            return State.Null;
+
+            return default;
         }
 
         public State GetBelongingState(State belongTo)
         {
-            foreach (var state in _states)
+            for (var i = 0; i < _states.Length; i++)
             {
+                var state = _states[i];
                 if (state.BelongTo(belongTo)) return state;
             }
-            return State.Null;
+
+            return default;
         }
 
         public StateGroup GetBelongingStates(State belongTo, Allocator allocator)
         {
             var group = new StateGroup(3, allocator);
-            foreach (var state in _states)
+            for (var i = 0; i < _states.Length; i++)
             {
+                var state = _states[i];
                 if (state.BelongTo(belongTo)) group.Add(state);
             }
 
             return group;
         }
 
-        public void WriteBuffer(ref DynamicBuffer<State> buffer)
+        public void WriteBuffer(DynamicBuffer<State> buffer)
         {
             foreach (var state in _states)
             {
@@ -238,15 +365,38 @@ namespace Zephyr.GOAP.Struct
 
         public override int GetHashCode()
         {
-            var hashCode = 17;
-            if (!_states.IsCreated) return hashCode;
+            if (!_states.IsCreated) return 0;
+            var hash = Utils.BasicHash;
             for (var i = 0; i < _states.Length; i++)
             {
-                var state = _states[i];
-                hashCode = hashCode *31 + state.GetHashCode();
+                hash = Utils.CombineHash(hash, _states[i].GetHashCode());
+            }
+            return hash;
+        }
+
+        /// <summary>
+        /// 目前即使内容一样，但顺序不一样也不认为equal
+        /// </summary>
+        /// <param name="other"></param>
+        /// <returns></returns>
+        public bool Equals(StateGroup other)
+        {
+            if (!_states.IsCreated && !other._states.IsCreated) return true;
+            if (!_states.IsCreated) return false;
+            if (!other._states.IsCreated) return false;
+            if (Length() != other.Length()) return false;
+            
+            for (var i = 0; i < _states.Length; i++)
+            {
+                if (!_states[i].Equals(other._states[i])) return false;
             }
 
-            return hashCode;
+            return true;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is StateGroup other && Equals(other);
         }
     }
 }

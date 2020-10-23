@@ -8,30 +8,33 @@ namespace Zephyr.GOAP.Struct
 {
     public struct StackData : IDisposable
     {
-        public NativeArray<Entity> AgentEntities;
+        public NativeList<Entity> AgentEntities;
         public NativeArray<float3> AgentPositions;
+        public StateGroup BaseStates;
+        public NativeHashMap<int, FixedString32> ItemNames;
 
-        //ActionExpand时的临时标记：当前正在展开的node所相关的agent的Id
-        public int CurrentAgentId;
-
-        public StateGroup CurrentStates;
-
-        public StackData(ref NativeArray<Entity> agentEntities, ref NativeArray<Translation> agentTranslations, StateGroup currentStates)
+        public StackData(NativeList<Entity> agentEntities, NativeArray<Translation> agentTranslations, StateGroup baseStates)
         {
             AgentEntities = agentEntities;
-            AgentPositions = new NativeArray<float3>(agentTranslations.Length, Allocator.Persistent);
+            AgentPositions = new NativeArray<float3>(agentTranslations.Length, Allocator.TempJob);
             for (var i = 0; i < agentTranslations.Length; i++)
             {
                 AgentPositions[i] = agentTranslations[i].Value;
             }
-            CurrentStates = currentStates;
-            CurrentAgentId = 0;
+            BaseStates = baseStates;
+            ItemNames = default;
+        }
+
+        public float3 GetAgentPosition(Entity agentEntity)
+        {
+            var id = AgentEntities.IndexOf(agentEntity);
+            return AgentPositions[id];
         }
         
         public void Dispose()
         {
             AgentPositions.Dispose();
-            CurrentStates.Dispose();
+            BaseStates.Dispose();
         }
     }
 }

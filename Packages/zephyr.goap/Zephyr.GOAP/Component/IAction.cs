@@ -1,30 +1,28 @@
 using Unity.Collections;
+using Unity.Entities;
 using Zephyr.GOAP.Struct;
 
 namespace Zephyr.GOAP.Component
 {
     public interface IAction
     {
-        NativeString32 GetName();
+        bool CheckTargetRequire(State targetRequire, Entity agentEntity, [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates);
+
+        StateGroup GetSettings(State targetRequire, Entity agentEntity, [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates, Allocator allocator);
+
+        void GetPreconditions([ReadOnly] State targetRequire, Entity agentEntity, State setting,
+            [ReadOnly] StackData stackData, [ReadOnly]StateGroup currentStates, StateGroup preconditions);
+
+        void GetEffects([ReadOnly] State targetRequire, State setting,
+            [ReadOnly] StackData stackData, StateGroup effects);
         
-        State GetTargetGoalState(ref StateGroup targetStates, ref StackData stackData);
-
-        StateGroup GetSettings(ref State targetState, ref StackData stackData, Allocator allocator);
-
-        void GetPreconditions([ReadOnly] ref State targetState, ref State setting,
-            [ReadOnly] ref StackData stackData, ref StateGroup preconditions);
-
-        void GetEffects([ReadOnly] ref State targetState, ref State setting,
-            [ReadOnly] ref StackData stackData, ref StateGroup effects);
+        float GetReward([ReadOnly] State targetRequire, State setting,
+            [ReadOnly] StackData stackData);
         
-        float GetReward([ReadOnly] ref State targetState, ref State setting,
-            [ReadOnly] ref StackData stackData);
-        
-        float GetExecuteTime([ReadOnly] ref State targetState, ref State setting,
-            [ReadOnly] ref StackData stackData);
+        float GetExecuteTime([ReadOnly] State setting);
 
-        void GetNavigatingSubjectInfo(ref State targetState, ref State setting,
-            [ReadOnly] ref StackData stackData, ref StateGroup preconditions,
+        void GetNavigatingSubjectInfo(State targetRequire, State setting,
+            [ReadOnly] StackData stackData, StateGroup preconditions,
             out NodeNavigatingSubjectType subjectType, out byte subjectId);
     }
 }

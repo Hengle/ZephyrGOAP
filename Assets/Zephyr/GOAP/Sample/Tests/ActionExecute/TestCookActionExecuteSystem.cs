@@ -3,11 +3,13 @@ using NUnit.Framework;
 using Unity.Collections;
 using Unity.Entities;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Component.AgentState;
 using Zephyr.GOAP.Sample.Game.Component;
+using Zephyr.GOAP.Sample.Game.Component.Order;
+using Zephyr.GOAP.Sample.GoapImplement.Component;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Action;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
 using Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem;
-using Zephyr.GOAP.Struct;
 using Zephyr.GOAP.Tests;
 
 namespace Zephyr.GOAP.Sample.Tests.ActionExecute
@@ -26,20 +28,8 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExecute
             
             _cookerEntity = EntityManager.CreateEntity();
             
-            //cooker预存好原料
-            var itemBuffer = EntityManager.AddBuffer<ContainedItemRef>(_cookerEntity);
-            itemBuffer.Add(new ContainedItemRef
-            {
-                ItemName = "input0",
-                ItemEntity = new Entity {Index = 99, Version = 9}
-            });
-            itemBuffer.Add(new ContainedItemRef
-            {
-                ItemName = "input1",
-                ItemEntity = new Entity {Index = 98, Version = 9}
-            });
-            
             EntityManager.AddComponentData(_agentEntity, new CookAction());
+            EntityManager.AddBuffer<WatchingOrder>(_agentEntity);
             
             EntityManager.AddComponentData(_actionNodeEntity, new Node
             {
@@ -52,47 +42,47 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExecute
             bufferStates.Add(new State
             {
                 Target = _cookerEntity,
-                Trait = typeof(ItemDestinationTrait),
+                Trait = TypeManager.GetTypeIndex<ItemDestinationTrait>(),
                 ValueString = "input0",
+                Amount = 1
             });
             bufferStates.Add(new State
             {
                 Target = _cookerEntity,
-                Trait = typeof(ItemDestinationTrait),
+                Trait = TypeManager.GetTypeIndex<ItemDestinationTrait>(),
                 ValueString = "input1",
+                Amount = 1
             });
             bufferStates.Add(new State
             {
                 Target = _cookerEntity,
-                Trait = typeof(ItemSourceTrait),
+                Trait = TypeManager.GetTypeIndex<ItemSourceTrait>(),
                 ValueString = "output",
+                Amount = 1
             });
         }
 
         [Test]
-        public void CookerRemoveInput()
+        public void CreateOrder()
         {
             _system.Update();
             _system.EcbSystem.Update();
             EntityManager.CompleteAllJobs();
 
-            var itemBuffer = EntityManager.GetBuffer<ContainedItemRef>(_cookerEntity);
-            var items = itemBuffer.ToNativeArray(Allocator.Temp);
-            Assert.IsFalse(items.Any(item => item.ItemName.Equals("input0")));
-            Assert.IsFalse(items.Any(item => item.ItemName.Equals("input1")));
-            items.Dispose();
+            var orderQuery =
+                EntityManager.CreateEntityQuery(typeof(Order), typeof(OrderWatchSystem.OrderWatched));
+            Assert.AreEqual(1, orderQuery.CalculateEntityCount());
         }
 
         [Test]
-        public void CookerGotOutput()
+        public void AgentState_To_Acting()
         {
             _system.Update();
             _system.EcbSystem.Update();
             EntityManager.CompleteAllJobs();
             
-            var itemBuffer = EntityManager.GetBuffer<ContainedItemRef>(_cookerEntity);
-            Assert.AreEqual(1, itemBuffer.Length);
-            Assert.IsTrue(itemBuffer[0].ItemName.Equals("output"));
+            Assert.IsTrue(EntityManager.HasComponent<Acting>(_agentEntity));
+            Assert.IsFalse(EntityManager.HasComponent<ReadyToAct>(_agentEntity));
         }
     }
 }

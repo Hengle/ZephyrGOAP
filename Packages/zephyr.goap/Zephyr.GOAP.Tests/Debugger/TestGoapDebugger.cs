@@ -12,6 +12,7 @@ namespace Zephyr.GOAP.Tests.Debugger
 {
     public class TestGoapDebugger : IGoapDebugger, IDisposable
     {
+        private bool _isWriteFile = true;
         private GoapLog _goapLog;
 
         public void StartLog(EntityManager entityManager)
@@ -23,44 +24,44 @@ namespace Zephyr.GOAP.Tests.Debugger
             _goapLog.StartLog(entityManager);
         }
 
-        public void SetNodeGraph(ref NodeGraph nodeGraph, EntityManager entityManager)
+        public void SetNodeGraph(NodeGraph nodeGraph, EntityManager entityManager)
         {
-            _goapLog.SetNodeGraph(ref nodeGraph, entityManager);
+            _goapLog.SetNodeGraph(nodeGraph, entityManager);
         }
 
         public void SetPathResult(EntityManager entityManager,
-            ref NativeArray<Entity> pathEntities, ref NativeList<Node> pathResult)
+            NativeArray<Entity> pathEntities, NativeList<Node> pathResult)
         {
-            _goapLog.SetPathResult(entityManager, ref pathEntities, ref pathResult);
+            _goapLog.SetPathResult(entityManager, pathEntities, pathResult);
         }
 
         public void SetNodeAgentInfos(EntityManager entityManager,
-            ref NativeMultiHashMap<int, NodeAgentInfo> nodeAgentInfos)
+            NativeMultiHashMap<int, NodeAgentInfo> nodeAgentInfos)
         {
-            _goapLog.SetNodeAgentInfos(entityManager, ref nodeAgentInfos);
+            _goapLog.SetNodeAgentInfos(entityManager, nodeAgentInfos);
         }
 
-        public void SetNodeTotalTimes(ref NativeHashMap<int, float> nodeTimes)
+        public void SetNodeTotalTimes(NativeHashMap<int, float> nodeTimes)
         {
-            _goapLog.SetNodeTotalTimes(ref nodeTimes);
+            _goapLog.SetNodeTotalTimes(nodeTimes);
         }
 
-        public void SetCurrentStates(ref StateGroup currentStates, EntityManager entityManager)
+        public void SetBaseStates(StateGroup baseStates, EntityManager entityManager)
         {
-            _goapLog.SetCurrentStates(ref currentStates, entityManager);
+            _goapLog.SetBaseStates(baseStates, entityManager);
         }
 
-        public void SetRewardSum(ref NativeHashMap<int, float> rewardSum)
+        public void SetRewardSum(NativeHashMap<int, float> rewardSum)
         {
-            _goapLog.SetRewardSum(ref rewardSum);
+            _goapLog.SetRewardSum(rewardSum);
         }
 
         public void SetSpecifiedPreconditions(EntityManager entityManager,
-            ref NativeList<int> pathNodeSpecifiedPreconditionIndices,
-            ref NativeList<State> pathNodeSpecifiedPreconditions)
+            NativeList<int> pathNodeSpecifiedPreconditionIndices,
+            NativeList<State> pathNodeSpecifiedPreconditions)
         {
             _goapLog.SetSpecifiedPreconditions(entityManager,
-                ref pathNodeSpecifiedPreconditionIndices, ref pathNodeSpecifiedPreconditions);
+                pathNodeSpecifiedPreconditionIndices, pathNodeSpecifiedPreconditions);
         }
 
         public void LogDone()
@@ -70,6 +71,8 @@ namespace Zephyr.GOAP.Tests.Debugger
 
         private void SaveToFile()
         {
+            if (!_isWriteFile) return;
+            
             var json = JsonUtility.ToJson(_goapLog);
 
             var path = "GoapTestLog/" + DateTime.Now.ToShortDateString();
@@ -99,9 +102,34 @@ namespace Zephyr.GOAP.Tests.Debugger
             Debug.LogWarning(log);
         }
 
+        public void LogPerformance(string log)
+        {
+            // Debug.Log(log);
+        }
+
+        public GoapLog GetLog()
+        {
+            return _goapLog;
+        }
+
         public void Dispose()
         {
             
+        }
+
+        public void SetWriteFile(bool isWriteFile)
+        {
+            _isWriteFile = isWriteFile;
+        }
+
+        public void SetPlanSuccess(bool isSuccess)
+        {
+            _goapLog.SetPlanSuccess(isSuccess);
+        }
+
+        public bool IsPlanSuccess()
+        {
+            return _goapLog.IsPlanSuccess();
         }
     }
 }

@@ -9,7 +9,7 @@
 // {
 //     public class TestGoalPlanningSystemCheckNodes : TestBase
 //     {
-//         //CurrentStates直接足以满足goal时，直接完成此goal
+//         //BaseStates直接足以满足goal时，直接完成此goal
 //
 //         private GoalPlanningSystem _system;
 //
@@ -18,7 +18,7 @@
 //         private NativeList<Node> _uncheckedNodes;
 //         private NativeList<Node> _unexpandedNodes;
 //         private NodeGraph _nodeGraph;
-//         private StateGroup _currentStates;
+//         private StateGroup _baseStates;
 //         private Node _goalNode;
 //
 //         [SetUp]
@@ -32,24 +32,24 @@
 //             _uncheckedNodes = new NativeList<Node>(Allocator.Persistent);
 //             _unexpandedNodes = new NativeList<Node>(Allocator.Persistent);
 //             _nodeGraph = new NodeGraph(1, Allocator.Persistent);
-//             _currentStates = new StateGroup(1, Allocator.Persistent);
+//             _baseStates = new StateGroup(1, Allocator.Persistent);
 //             
 //             var goalStates = new StateGroup(1, Allocator.Temp){new State
 //             {
 //                 Target = _targetEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             }};
-//             _goalNode = new Node(ref goalStates,new NativeString64("goal"),0 , 0);
+//             _goalNode = new Node(goalStates,new NativeString64("goal"),0 , 0);
 //             
-//             _nodeGraph.SetGoalNode(_goalNode, ref goalStates);
+//             _nodeGraph.SetGoalNode(_goalNode, goalStates);
 //             
 //             _uncheckedNodes.Add(_goalNode);
 //             
-//             _currentStates.Add(new State
+//             _baseStates.Add(new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             });
 //         }
@@ -61,7 +61,7 @@
 //             _uncheckedNodes.Dispose();
 //             _unexpandedNodes.Dispose();
 //             _nodeGraph.Dispose();
-//             _currentStates.Dispose();
+//             _baseStates.Dispose();
 //         }
 //
 //         [Test]
@@ -70,22 +70,22 @@
 //             var state = new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             };
-//             var node = new Node(ref state, new NativeString64("route"), 0, 1);
+//             var node = new Node(state, new NativeString64("route"), 0, 1);
 //
 //             var preconditions = new StateGroup();
 //             var effects = new StateGroup();
-//             _nodeGraph.AddRouteNode(node, ref state,
+//             _nodeGraph.AddRouteNode(node, state,
 //                 _nodeGraph.NodeStateWriter,
 //                 _nodeGraph.PreconditionWriter, _nodeGraph.EffectWriter,
-//                 ref preconditions, ref effects, _goalNode,
+//                 preconditions, effects, _goalNode,
 //                 new NativeString64("route"));
 //             _uncheckedNodes.Add(node);
 //
-//             _system.CheckNodes(ref _uncheckedNodes, ref _nodeGraph, ref _currentStates,
-//                 ref _unexpandedNodes);
+//             _system.CheckNodes(_uncheckedNodes, _nodeGraph, _baseStates,
+//                 _unexpandedNodes);
 //             
 //             Assert.AreEqual(3, _nodeGraph.Length());
 //             var startParents = _nodeGraph.GetEdgeToParents(_nodeGraph.GetStartNode());
@@ -96,8 +96,8 @@
 //         [Test]
 //         public void OnlyGoalInNodeGraph_GoalIntoUnExpandedNodes()
 //         {
-//             _system.CheckNodes(ref _uncheckedNodes, ref _nodeGraph, ref _currentStates,
-//                 ref _unexpandedNodes);
+//             _system.CheckNodes(_uncheckedNodes, _nodeGraph, _baseStates,
+//                 _unexpandedNodes);
 //             
 //             Assert.AreEqual(1, _nodeGraph.Length());
 //             Assert.AreEqual(1, _unexpandedNodes.Length);
@@ -110,22 +110,22 @@
 //             var state = new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(GatherStationTrait),
+//                 Trait = TypeManager.GetTypeIndex<GatherStationTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             };
-//             var node = new Node(ref state, new NativeString64("route"), 0, 1);
+//             var node = new Node(state, new NativeString64("route"), 0, 1);
 //
 //             var preconditions = new StateGroup();
 //             var effects = new StateGroup();
-//             _nodeGraph.AddRouteNode(node, ref state,
+//             _nodeGraph.AddRouteNode(node, state,
 //                 _nodeGraph.NodeStateWriter,
 //                 _nodeGraph.PreconditionWriter, _nodeGraph.EffectWriter,
-//                 ref preconditions, ref effects, _goalNode,
+//                 preconditions, effects, _goalNode,
 //                 new NativeString64("route"));
 //             _uncheckedNodes.Add(node);
 //
-//             _system.CheckNodes(ref _uncheckedNodes, ref _nodeGraph, ref _currentStates,
-//                 ref _unexpandedNodes);
+//             _system.CheckNodes(_uncheckedNodes, _nodeGraph, _baseStates,
+//                 _unexpandedNodes);
 //             
 //             Assert.AreEqual(2, _nodeGraph.Length());
 //             Assert.AreEqual(2, _unexpandedNodes.Length);

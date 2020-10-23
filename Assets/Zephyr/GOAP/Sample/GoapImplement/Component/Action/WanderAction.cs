@@ -14,65 +14,56 @@ namespace Zephyr.GOAP.Sample.GoapImplement.Component.Action
     public struct WanderAction : IComponentData, IAction
     {
         public int Level;
-        
-        public NativeString32 GetName()
-        {
-            return nameof(WanderAction);
-        }
 
-        public State GetTargetGoalState(ref StateGroup targetStates, ref StackData stackData)
+        public bool CheckTargetRequire(State targetRequire, Entity agentEntity,
+            [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates)
         {
-            foreach (var targetState in targetStates)
+            var wanderState = new State
             {
-                var wanderState = new State
-                {
-                    Target = stackData.AgentEntities[stackData.CurrentAgentId],
-                    Trait = typeof(WanderTrait),
-                };
-                //只针对自身wander
-                if (!targetState.BelongTo(wanderState)) continue;
-
-                return targetState;
-            }
-
-            return default;
+                Target = agentEntity,
+                Trait = TypeManager.GetTypeIndex<WanderTrait>(),
+            };
+            
+            //只针对自身wander
+            return targetRequire.BelongTo(wanderState);
         }
         
-        public StateGroup GetSettings(ref State targetState, ref StackData stackData, Allocator allocator)
+        public StateGroup GetSettings(State targetRequire, Entity agentEntity,
+            [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates, Allocator allocator)
         {
             var settings = new StateGroup(1, allocator);
             
-            settings.Add(targetState);
+            settings.Add(targetRequire);
 
             return settings;
         }
 
-        public void GetPreconditions(ref State targetState, ref State setting,
-            ref StackData stackData, ref StateGroup preconditions)
+        public void GetPreconditions(State targetRequire, Entity agentEntity, State setting,
+            [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates, StateGroup preconditions)
         {
             //没有precondition
         }
 
-        public void GetEffects(ref State targetState, ref State setting,
-            ref StackData stackData, ref StateGroup effects)
+        public void GetEffects(State targetRequire, State setting,
+            [ReadOnly]StackData stackData, StateGroup effects)
         {
             //达成wander需求
             effects.Add(setting);
         }
 
-        public float GetReward(ref State targetState, ref State setting, ref StackData stackData)
+        public float GetReward(State targetRequire, State setting, [ReadOnly]StackData stackData)
         {
             return 0;
         }
 
-        public float GetExecuteTime(ref State targetState, ref State setting, ref StackData stackData)
+        public float GetExecuteTime([ReadOnly]State setting)
         {
             return 0;
             // return WanderActionExecuteSystem.WanderTime;
         }
 
-        public void GetNavigatingSubjectInfo(ref State targetState, ref State setting,
-            ref StackData stackData, ref StateGroup preconditions,
+        public void GetNavigatingSubjectInfo(State targetRequire, State setting,
+            [ReadOnly]StackData stackData, StateGroup preconditions,
             out NodeNavigatingSubjectType subjectType, out byte subjectId)
         {
             subjectType = NodeNavigatingSubjectType.Null;

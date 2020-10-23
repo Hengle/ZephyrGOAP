@@ -22,8 +22,8 @@ namespace Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem
         /// </summary>
         public const float WanderTime = 5;
 
-        protected override JobHandle ExecuteActionJob(NativeString32 nameOfAction, NativeArray<Entity> waitingNodeEntities,
-            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates, EntityCommandBuffer.Concurrent ecb, JobHandle inputDeps)
+        protected override JobHandle ExecuteActionJob(FixedString32 nameOfAction, NativeArray<Entity> waitingNodeEntities,
+            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates, EntityCommandBuffer.ParallelWriter ecb, JobHandle inputDeps)
         {
             return Entities.WithName("WanderActionExecuteJob")
                 .WithAll<ReadyToAct>()
@@ -42,7 +42,7 @@ namespace Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem
 
                         //进入执行中状态
                         Zephyr.GOAP.Utils.NextAgentState<ReadyToAct, Acting>(agentEntity, entityInQueryIndex,
-                            ref ecb, nodeEntity);
+                            ecb, nodeEntity);
                         break;
                     }
                 }).Schedule(inputDeps);
@@ -59,8 +59,8 @@ namespace Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem
         /// <param name="ecb"></param>
         /// <param name="inputDeps"></param>
         /// <returns></returns>
-        protected override JobHandle ExecuteActionJob2(NativeString32 nameOfAction, NativeArray<Entity> waitingNodeEntities,
-            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates, EntityCommandBuffer.Concurrent ecb, JobHandle inputDeps)
+        protected override JobHandle ExecuteActionJob2(FixedString32 nameOfAction, NativeArray<Entity> waitingNodeEntities,
+            NativeArray<Node> waitingNodes, BufferFromEntity<State> waitingStates, EntityCommandBuffer.ParallelWriter ecb, JobHandle inputDeps)
         {
             return Entities.WithName("WanderActionDoneJob")
                 .WithAll<Acting>()
@@ -80,18 +80,18 @@ namespace Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem
 
                         //agent指示执行完毕
                         Zephyr.GOAP.Utils.NextAgentState<Acting, ActDone>(agentEntity, entityInQueryIndex,
-                            ref ecb, nodeEntity);
+                            ecb, nodeEntity);
 
                         //node指示执行完毕 
                         Zephyr.GOAP.Utils.NextActionNodeState<ActionNodeActing, ActionNodeDone>(nodeEntity,
-                            entityInQueryIndex, ref ecb, agentEntity);
+                            entityInQueryIndex, ecb, agentEntity);
                         break;
                     }
                 }).Schedule(inputDeps);
             ;
         }
 
-        protected override NativeString32 GetNameOfAction()
+        protected override FixedString32 GetNameOfAction()
         {
             return nameof(WanderAction);
         }

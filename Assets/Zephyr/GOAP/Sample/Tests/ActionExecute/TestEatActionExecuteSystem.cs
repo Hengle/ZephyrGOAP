@@ -2,7 +2,11 @@ using NUnit.Framework;
 using Unity.Collections;
 using Unity.Entities;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Component.AgentState;
 using Zephyr.GOAP.Sample.Game.Component;
+using Zephyr.GOAP.Sample.Game.Component.Order;
+using Zephyr.GOAP.Sample.GoapImplement;
+using Zephyr.GOAP.Sample.GoapImplement.Component;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Action;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
 using Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem;
@@ -25,18 +29,9 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExecute
             _system = World.GetOrCreateSystem<EatActionExecuteSystem>();
 
             _diningTableEntity = EntityManager.CreateEntity();
-            EntityManager.AddComponentData(_diningTableEntity, new DiningTableTrait());
-            EntityManager.AddComponentData(_diningTableEntity, new ItemContainer{IsTransferSource = true});
-            var buffer = EntityManager.AddBuffer<ContainedItemRef>(_diningTableEntity);
-            //diningTable预存好食物
-            buffer.Add(new ContainedItemRef
-            {
-                ItemName = new NativeString32("roast_apple"),
-                ItemEntity = new Entity {Index = 99, Version = 9}
-            });
             
-            EntityManager.AddComponentData(_agentEntity, new Stamina {Value = 0});
             EntityManager.AddComponentData(_agentEntity, new EatAction());
+            EntityManager.AddBuffer<WatchingOrder>(_agentEntity);
             
             EntityManager.AddComponentData(_actionNodeEntity, new Node
             {
@@ -50,41 +45,44 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExecute
             bufferStates.Add(new State
             {
                 Target = _diningTableEntity,
-                Trait = typeof(DiningTableTrait),
+                Trait = TypeManager.GetTypeIndex<DiningTableTrait>(),
             });
             bufferStates.Add(new State
             {
                 Target = _diningTableEntity,
-                Trait = typeof(ItemDestinationTrait),
+                Trait = TypeManager.GetTypeIndex<ItemDestinationTrait>(),
                 ValueString = "roast_apple",
+                Amount = 1
             });
             //effect
             bufferStates.Add(new State
             {
                 Target = _agentEntity,
-                Trait = typeof(StaminaTrait),
+                Trait = TypeManager.GetTypeIndex<StaminaTrait>(),
             });
         }
 
         [Test]
-        public void TableRemoveFood()
+        public void CreateOrder()
         {
             _system.Update();
             _system.EcbSystem.Update();
             EntityManager.CompleteAllJobs();
 
-            var itemBuffer = EntityManager.GetBuffer<ContainedItemRef>(_diningTableEntity);
-            Assert.Zero(itemBuffer.Length);
+            var orderQuery =
+                EntityManager.CreateEntityQuery(typeof(Order), typeof(OrderWatchSystem.OrderWatched));
+            Assert.AreEqual(1, orderQuery.CalculateEntityCount());
         }
 
         [Test]
-        public void AgentGotStamina()
+        public void AgentState_To_Acting()
         {
             _system.Update();
             _system.EcbSystem.Update();
             EntityManager.CompleteAllJobs();
             
-            Assert.AreEqual(Sample.Utils.GetFoodStamina("roast_apple"), EntityManager.GetComponentData<Stamina>(_agentEntity).Value);
+            Assert.IsTrue(EntityManager.HasComponent<Acting>(_agentEntity));
+            Assert.IsFalse(EntityManager.HasComponent<ReadyToAct>(_agentEntity));
         }
     }
 }

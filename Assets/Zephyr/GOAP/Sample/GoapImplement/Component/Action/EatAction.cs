@@ -12,55 +12,47 @@ namespace Zephyr.GOAP.Sample.GoapImplement.Component.Action
     public struct EatAction : IComponentData, IAction
     {
         public int Level;
-        
-        public NativeString32 GetName()
-        {
-            return nameof(EatAction);
-        }
 
-        public State GetTargetGoalState(ref StateGroup targetStates, ref StackData stackData)
+        public bool CheckTargetRequire(State targetRequire, Entity agentEntity,
+            [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates)
         {
-            foreach (var targetState in targetStates)
+            var staminaState = new State
             {
-                var staminaState = new State
-                {
-                    Target = stackData.AgentEntities[stackData.CurrentAgentId],
-                    Trait = typeof(StaminaTrait),
-                };
-                //只针对自身stamina的正面goal state
-                if (!targetState.BelongTo(staminaState)) continue;
+                Target = agentEntity,
+                Trait = TypeManager.GetTypeIndex<StaminaTrait>(),
+            };
 
-                return targetState;
-            }
-
-            return default;
+            return targetRequire.BelongTo(staminaState);
         }
         
-        public StateGroup GetSettings(ref State targetState, ref StackData stackData, Allocator allocator)
+        public StateGroup GetSettings(State targetRequire, Entity agentEntity,
+            [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates, Allocator allocator)
         {
             var settings = new StateGroup(1, allocator);
             
             //setting为有食物的餐桌
             var diningTableTemplate = new State
             {
-                Trait = typeof(DiningTableTrait),
+                Trait = TypeManager.GetTypeIndex<DiningTableTrait>(),
             };
             var tables =
-                stackData.CurrentStates.GetBelongingStates(diningTableTemplate, Allocator.Temp);
+                currentStates.GetBelongingStates(diningTableTemplate, Allocator.Temp);
             var itemNames =
-                Utils.GetItemNamesOfSpecificTrait(typeof(FoodTrait),
-                    Allocator.Temp);
+                Utils.GetItemNamesOfSpecificTrait(TypeManager.GetTypeIndex<FoodTrait>(),
+                    stackData.ItemNames, Allocator.Temp);
             //todo 此处考虑直接寻找最近的餐桌以避免setting过于膨胀
-            foreach (var table in tables)
+            for (var tableId = 0; tableId < tables.Length(); tableId++)
             {
-                for (var i = 0; i < itemNames.Length; i++)
+                var table = tables[tableId];
+                for (var itemId = 0; itemId < itemNames.Length; itemId++)
                 {
-                    var itemName = itemNames[i];
+                    var itemName = itemNames[itemId];
                     var foodOnTableTemplate = new State
                     {
                         Target = table.Target,
-                        Trait = typeof(ItemDestinationTrait),
-                        ValueString = itemName
+                        Trait = TypeManager.GetTypeIndex<ItemDestinationTrait>(),
+                        ValueString = itemName,
+                        Amount = 1
                     };
                     settings.Add(foodOnTableTemplate);
                 }
@@ -72,34 +64,34 @@ namespace Zephyr.GOAP.Sample.GoapImplement.Component.Action
             return settings;
         }
 
-        public void GetPreconditions(ref State targetState, ref State setting,
-            ref StackData stackData, ref StateGroup preconditions)
+        public void GetPreconditions(State targetRequire, Entity agentEntity, State setting,
+            [ReadOnly]StackData stackData, [ReadOnly]StateGroup currentStates, StateGroup preconditions)
         {
             //有食物的餐桌
             preconditions.Add(setting);
         }
 
-        public void GetEffects(ref State targetState, ref State setting,
-            ref StackData stackData, ref StateGroup effects)
+        public void GetEffects(State targetRequire, State setting,
+            [ReadOnly]StackData stackData, StateGroup effects)
         {
             //自身获得stamina
-            effects.Add(targetState);
+            effects.Add(targetRequire);
         }
 
-        public float GetReward(ref State targetState, ref State setting, ref StackData stackData)
+        public float GetReward(State targetRequire, State setting, [ReadOnly]StackData stackData)
         {
             //由食物决定
             //todo 示例项目通过工具方法获取食物reward，实际应从define取
-            return Utils.GetFoodReward(setting.ValueString);
+            return Utils.GetFoodReward(setting.ValueString, stackData.ItemNames);
         }
 
-        public float GetExecuteTime(ref State targetState, ref State setting, ref StackData stackData)
+        public float GetExecuteTime([ReadOnly]State setting)
         {
             return 2;
         }
 
-        public void GetNavigatingSubjectInfo(ref State targetState, ref State setting,
-            ref StackData stackData, ref StateGroup preconditions,
+        public void GetNavigatingSubjectInfo(State targetRequire, State setting,
+            [ReadOnly]StackData stackData, StateGroup preconditions,
             out NodeNavigatingSubjectType subjectType, out byte subjectId)
         {
             //导航目标为餐桌

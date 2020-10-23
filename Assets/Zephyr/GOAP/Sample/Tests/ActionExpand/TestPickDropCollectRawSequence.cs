@@ -3,9 +3,10 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Zephyr.GOAP.Component;
 using Zephyr.GOAP.Component.GoalManage;
+using Zephyr.GOAP.Sample.GoapImplement;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Action;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
-using Zephyr.GOAP.Struct;
+using Zephyr.GOAP.Sample.GoapImplement.System;
 using Zephyr.GOAP.System;
 using Zephyr.GOAP.Tests;
 
@@ -15,7 +16,7 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
     /// 目标：Collector提供指定物品
     /// 期望：PickRaw + DropRaw + Collect
     /// </summary>
-    public class TestPickDropCollectRawSequence : TestActionExpandBase
+    public class TestPickDropCollectRawSequence : TestActionExpandBase<GoalPlanningSystem>
     {
         private Entity _collectorEntity, _rawSourceEntity;
         
@@ -34,29 +35,32 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
             SetGoal(new State
             {
                 Target = _collectorEntity,
-                Trait = typeof(ItemSourceTrait),
-                ValueString = Sample.Utils.RawPeachName
+                Trait = TypeManager.GetTypeIndex<ItemSourceTrait>(),
+                ValueString = ItemNames.Instance().RawPeachName,
+                Amount = 1
             });
             
-            //给CurrentStates写入假环境数据：世界里有collector和rawSource
-            var buffer = EntityManager.GetBuffer<State>(CurrentStatesHelper.CurrentStatesEntity);
+            //给BaseStates写入假环境数据：世界里有collector和rawSource
+            var buffer = EntityManager.GetBuffer<State>(BaseStatesHelper.BaseStatesEntity);
             buffer.Add(new State
             {
                 Target = _collectorEntity,
-                Trait = typeof(CollectorTrait),
+                Trait = TypeManager.GetTypeIndex<CollectorTrait>(),
             });
             buffer.Add(new State
             {
                 Target = _collectorEntity,
-                Trait = typeof(ItemPotentialSourceTrait),
-                ValueString = Sample.Utils.RawPeachName
+                Trait = TypeManager.GetTypeIndex<ItemPotentialSourceTrait>(),
+                ValueString = ItemNames.Instance().RawPeachName,
+                Amount = 1
             });
             buffer.Add(new State
             {
                 Target = _rawSourceEntity,
                 Position = new float3(5,0,0),
-                Trait = typeof(RawSourceTrait),
-                ValueString = Sample.Utils.RawPeachName
+                Trait = TypeManager.GetTypeIndex<RawSourceTrait>(),
+                ValueString = ItemNames.Instance().RawPeachName,
+                Amount = 1
             });
         }
 
@@ -81,7 +85,7 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
         [Test]
         public void NoRaw_Fail()
         {
-            var buffer = EntityManager.GetBuffer<State>(CurrentStatesHelper.CurrentStatesEntity);
+            var buffer = EntityManager.GetBuffer<State>(BaseStatesHelper.BaseStatesEntity);
             buffer.RemoveAt(2);
             
             _system.Update();
@@ -96,13 +100,14 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
         {
             var newRawEntity = new Entity {Index = 99, Version = 99};
             //增加一个较近的raw，planner应该选择这个
-            var buffer = EntityManager.GetBuffer<State>(CurrentStatesHelper.CurrentStatesEntity);
+            var buffer = EntityManager.GetBuffer<State>(BaseStatesHelper.BaseStatesEntity);
             buffer.Add(new State
             {
                 Target = newRawEntity,
                 Position = new float3(2,0,0),
-                Trait = typeof(RawSourceTrait),
-                ValueString = Sample.Utils.RawPeachName
+                Trait = TypeManager.GetTypeIndex<RawSourceTrait>(),
+                ValueString = ItemNames.Instance().RawPeachName,
+                Amount = 1
             });
             
             _system.Update();

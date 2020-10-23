@@ -1,11 +1,11 @@
 using NUnit.Framework;
 using Unity.Entities;
-using UnityEngine;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Sample.GoapImplement;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Action;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
+using Zephyr.GOAP.Sample.GoapImplement.System;
 using Zephyr.GOAP.Sample.GoapImplement.System.SensorSystem;
-using Zephyr.GOAP.Struct;
 using Zephyr.GOAP.System;
 using Zephyr.GOAP.Tests;
 
@@ -15,7 +15,7 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
     /// 目标：获得体力
     /// 预期：规划出Eat-Cook序列
     /// </summary>
-    public class TestEatCookSequence : TestActionExpandBase
+    public class TestEatCookSequence : TestActionExpandBase<GoalPlanningSystem>
     {
 
         private Entity _cookerEntity, _diningTableEntity, _itemSourceEntity;
@@ -37,26 +37,27 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
             SetGoal(new State
             {
                 Target = _agentEntity,
-                Trait = typeof(StaminaTrait),
+                Trait = TypeManager.GetTypeIndex<StaminaTrait>(),
             });
             
-            //给CurrentStates写入假环境数据：世界里有餐桌、有原料、配方
-            var buffer = EntityManager.GetBuffer<State>(CurrentStatesHelper.CurrentStatesEntity);
+            //给BaseStates写入假环境数据：世界里有餐桌、有原料、配方
+            var buffer = EntityManager.GetBuffer<State>(BaseStatesHelper.BaseStatesEntity);
             buffer.Add(new State
             {
                 Target = _cookerEntity,
-                Trait = typeof(CookerTrait),
+                Trait = TypeManager.GetTypeIndex<CookerTrait>(),
             });
             buffer.Add(new State
             {
                 Target = _itemSourceEntity,
-                Trait = typeof(ItemSourceTrait),
-                ValueString = "raw_apple",
+                Trait = TypeManager.GetTypeIndex<ItemSourceTrait>(),
+                ValueString = ItemNames.Instance().RawAppleName,
+                Amount = 1
             });
             buffer.Add(new State
             {
                 Target = _diningTableEntity,
-                Trait = typeof(DiningTableTrait),
+                Trait = TypeManager.GetTypeIndex<DiningTableTrait>(),
             });
             
             var recipeSensorSystem = World.GetOrCreateSystem<RecipeSensorSystem>();
@@ -69,7 +70,7 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
             _system.Update();
             EntityManager.CompleteAllJobs();
             
-            Debug.Log(_debugger.GoalNodeLog);
+            Assert.IsTrue(_debugger.IsPlanSuccess());
             var pathResult = _debugger.PathResult;
             Assert.AreEqual(6, pathResult.Length);
             Assert.AreEqual(nameof(EatAction), pathResult[0].name);

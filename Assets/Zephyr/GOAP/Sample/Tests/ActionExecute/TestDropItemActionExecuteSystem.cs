@@ -1,7 +1,10 @@
 using NUnit.Framework;
 using Unity.Entities;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Component.AgentState;
 using Zephyr.GOAP.Sample.Game.Component;
+using Zephyr.GOAP.Sample.Game.Component.Order;
+using Zephyr.GOAP.Sample.GoapImplement.Component;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Action;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
 using Zephyr.GOAP.Sample.GoapImplement.System.ActionExecuteSystem;
@@ -25,19 +28,7 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExecute
             _containerEntity = EntityManager.CreateEntity();
 
             EntityManager.AddComponentData(_agentEntity, new DropItemAction());
-            var buffer = EntityManager.AddBuffer<ContainedItemRef>(_agentEntity);
-            buffer.Add(new ContainedItemRef
-            {
-                ItemEntity = new Entity {Index = 9, Version = 9},
-                ItemName = "item"
-            });
-            
-            buffer = EntityManager.AddBuffer<ContainedItemRef>(_containerEntity);
-            buffer.Add(new ContainedItemRef
-            {
-                ItemEntity = new Entity {Index = 8, Version = 9},
-                ItemName = "origin"
-            });
+            EntityManager.AddBuffer<WatchingOrder>(_agentEntity);
             
             EntityManager.AddComponentData(_actionNodeEntity, new Node
             {
@@ -50,36 +41,40 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExecute
             bufferStates.Add(new State
             {
                 Target = _agentEntity,
-                Trait = typeof(ItemTransferTrait),
+                Trait = TypeManager.GetTypeIndex<ItemTransferTrait>(),
                 ValueString = "item",
+                Amount = 1
             });
             bufferStates.Add(new State
             {
                 Target = _containerEntity,
-                Trait = typeof(ItemDestinationTrait),
+                Trait = TypeManager.GetTypeIndex<ItemDestinationTrait>(),
                 ValueString ="item",
+                Amount = 1
             });
         }
 
         [Test]
-        public void TargetGotItem()
+        public void CreateOrder()
+        {
+            _system.Update();
+            _system.EcbSystem.Update();
+            EntityManager.CompleteAllJobs();
+
+            var orderQuery =
+                EntityManager.CreateEntityQuery(typeof(Order), typeof(OrderWatchSystem.OrderWatched));
+            Assert.AreEqual(1, orderQuery.CalculateEntityCount());
+        }
+
+        [Test]
+        public void AgentState_To_Acting()
         {
             _system.Update();
             _system.EcbSystem.Update();
             EntityManager.CompleteAllJobs();
             
-            var itemBuffer = EntityManager.GetBuffer<ContainedItemRef>(_containerEntity);
-            Assert.AreEqual(2, itemBuffer.Length);
-            Assert.AreEqual(new ContainedItemRef
-            {
-                ItemEntity = new Entity {Index = 8, Version = 9},
-                ItemName = "origin"
-            }, itemBuffer[0]);
-            Assert.AreEqual(new ContainedItemRef
-            {
-                ItemEntity = new Entity {Index = 9, Version = 9},
-                ItemName = "item"
-            }, itemBuffer[1]);
+            Assert.IsTrue(EntityManager.HasComponent<Acting>(_agentEntity));
+            Assert.IsFalse(EntityManager.HasComponent<ReadyToAct>(_agentEntity));
         }
     }
 }

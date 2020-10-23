@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
-using UnityEngine;
 using UnityEngine.Assertions;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Lib;
 
 namespace Zephyr.GOAP.Struct
 {
@@ -14,78 +14,111 @@ namespace Zephyr.GOAP.Struct
         private NativeHashMap<int, Node> _nodes;
         
         [ReadOnly]
-        private NativeList<ValueTuple<int,int>> _nodeToParents;
+        private NativeList<ZephyrValueTuple<int,int>> _nodeToParents;
+
+        [ReadOnly]
+        private NativeHashMap<int, State> _states;
+
+        [ReadOnly]
+        private NativeList<ZephyrValueTuple<int,int>> _effectHashes;
         
         [ReadOnly]
-        private NativeList<ValueTuple<int,State>> _nodeStates;
+        private NativeList<ZephyrValueTuple<int,int>> _preconditionHashes;
         
         [ReadOnly]
-        private NativeList<ValueTuple<int,State>> _preconditions;
-        
+        private NativeList<ZephyrValueTuple<int,int>> _requireHashes;
+
+        /// <summary>
+        /// node对baseStates的累积改变量
+        /// </summary>
         [ReadOnly]
-        private NativeList<ValueTuple<int,State>> _effects;
+        private NativeList<ZephyrValueTuple<int, int>> _deltaHashes;
+
 
         public NativeList<int> _deadEndNodeHashes;
-
-        private int _goalNodeHash;
 
         /// <summary>
         /// 起点Node代表当前状态，没有Action
         /// </summary>
-        private int _startNodeHash;
- 
-        public NodeGraph(int initialCapacity, ref DynamicBuffer<State> startNodeStates, Allocator allocator)
+        public int StartNodeHash { get; }
+        
+        public int GoalNodeHash { get; private set; }
+
+        public NodeGraph(int initialCapacity, StateGroup startRequires, Allocator allocator) : this()
         {
             _nodes = new NativeHashMap<int, Node>(initialCapacity, allocator);
             
-            _nodeToParents = new NativeList<ValueTuple<int, int>>(initialCapacity*4, allocator);
-            _nodeStates = new NativeList<ValueTuple<int, State>>(initialCapacity*4, allocator);
-            _preconditions = new NativeList<ValueTuple<int, State>>(initialCapacity*4, allocator);
-            _effects = new NativeList<ValueTuple<int, State>>(initialCapacity*4, allocator);
+            _nodeToParents = new NativeList<ZephyrValueTuple<int, int>>(initialCapacity*4, allocator);
+            
+            _states = new NativeHashMap<int, State>(initialCapacity*4, allocator);
+            _effectHashes = new NativeList<ZephyrValueTuple<int,int>>(initialCapacity*2, allocator);
+            _preconditionHashes = new NativeList<ZephyrValueTuple<int,int>>(initialCapacity*2, allocator);
+            _requireHashes = new NativeList<ZephyrValueTuple<int,int>>(initialCapacity*3, allocator);
+            _deltaHashes = new NativeList<ZephyrValueTuple<int,int>>(initialCapacity*2, allocator);
             
             _deadEndNodeHashes = new NativeList<int>(allocator);
             
             var startNode = new Node {Name = "start"};
-            _startNodeHash = startNode.HashCode;
-            _nodes.Add(_startNodeHash, startNode);
-            for (var i = 0; i < startNodeStates.Length; i++)
+            StartNodeHash = startNode.HashCode;
+            _nodes.Add(StartNodeHash, startNode);
+            for (var i = 0; i < startRequires.Length(); i++)
             {
-                _effects.Add((_startNodeHash, startNodeStates[i]));
+               AddEffect(startRequires[i], StartNodeHash);
             }
             
-            _goalNodeHash = 0;
+            GoalNodeHash = 0;
         }
 
-        public void SetGoalNode(Node goal, ref StateGroup stateGroup)
+        public void AddEffect(State effect, int nodeHash)
         {
-            if (_goalNodeHash != 0)
+            var effectHash = effect.GetHashCode();
+            _effectHashes.Add(new ZephyrValueTuple<int,int>(nodeHash, effectHash));
+            if (_states.ContainsKey(effectHash)) return;
+            _states.Add(effectHash, effect);
+        }
+
+        public void SetGoalNode(Node goal, StateGroup requires)
+        {
+            //先清除旧的
+            if (GoalNodeHash != 0)
             {
-                _nodes.Remove(_goalNodeHash);
-                for (var i = _nodeStates.Length - 1; i >= 0; i--)
+                _nodes.Remove(GoalNodeHash);
+                for (var i = _requireHashes.Length - 1; i >= 0; i--)
                 {
-                    var (hash, _) = _nodeStates[i];
-                    if (!hash.Equals(_goalNodeHash)) continue;
-                    _nodeStates.RemoveAtSwapBack(i);
+                    var (nodeHash, stateHash) = _requireHashes[i];
+                    if (!nodeHash.Equals(GoalNodeHash)) continue;
+                    // _states.Removere(stateHash); //不可以从states里清除，因为可能有多个node引用到
+                    _requireHashes.RemoveAtSwapBack(i);
                 }
             }
             
-            _goalNodeHash = goal.HashCode;
-            _nodes.Add(_goalNodeHash, goal);
-            foreach (var state in stateGroup)
+            GoalNodeHash = goal.HashCode;
+            _nodes.Add(GoalNodeHash, goal);
+            foreach (var state in requires)
             {
-                _nodeStates.Add((_goalNodeHash, state));
+                var stateHash = state.GetHashCode();
+                _requireHashes.Add(new ZephyrValueTuple<int,int>(GoalNodeHash, stateHash));
+                _states.TryAdd(stateHash, state);
             }
         }
 
         public NativeHashMap<int, Node>.ParallelWriter NodesWriter => _nodes.AsParallelWriter();
         
-        public NativeList<ValueTuple<int, int>>.ParallelWriter NodeToParentsWriter => _nodeToParents.AsParallelWriter();
+        public NativeList<ZephyrValueTuple<int, int>>.ParallelWriter NodeToParentsWriter => _nodeToParents.AsParallelWriter();
         
-        public NativeList<ValueTuple<int, State>>.ParallelWriter NodeStatesWriter => _nodeStates.AsParallelWriter();
+        public NativeHashMap<int, State>.ParallelWriter StatesWriter => _states.AsParallelWriter();
+
+        public NativeList<ZephyrValueTuple<int,int>>.ParallelWriter EffectHashesWriter =>
+            _effectHashes.AsParallelWriter();
         
-        public NativeList<ValueTuple<int, State>>.ParallelWriter PreconditionsWriter => _preconditions.AsParallelWriter();
+        public NativeList<ZephyrValueTuple<int,int>>.ParallelWriter PreconditionHashesWriter =>
+            _preconditionHashes.AsParallelWriter();
         
-        public NativeList<ValueTuple<int, State>>.ParallelWriter EffectsWriter => _effects.AsParallelWriter();
+        public NativeList<ZephyrValueTuple<int, int>>.ParallelWriter RequireHashesWriter =>
+            _requireHashes.AsParallelWriter();
+        
+        public NativeList<ZephyrValueTuple<int, int>>.ParallelWriter DeltaHashesWriter =>
+            _deltaHashes.AsParallelWriter();
 
         /// <summary>
         /// 追加对起点的链接
@@ -95,13 +128,13 @@ namespace Zephyr.GOAP.Struct
         {
             //start node的iteration设置为此Node+1
             var iteration = parent.Iteration;
-            var startNode = _nodes[_startNodeHash];
+            var startNode = _nodes[StartNodeHash];
             if (startNode.Iteration <= iteration)
             {
                 startNode.Iteration = iteration + 1;
-                _nodes[_startNodeHash] = startNode;
+                _nodes[StartNodeHash] = startNode;
             }
-            _nodeToParents.Add((_startNodeHash, parent.HashCode));
+            _nodeToParents.Add(new ZephyrValueTuple<int,int>(StartNodeHash, parent.HashCode));
         }
 
         public Node this[int hashCode]
@@ -168,115 +201,125 @@ namespace Zephyr.GOAP.Struct
         }
 
         /// <summary>
-        /// 读取指定node组的所有state
+        /// 读取指定node的所有require到StateGroup中
+        /// </summary>
+        /// <param name="node"></param>
+        /// <param name="allocator"></param>
+        /// <param name="isPop">是否弹出（也就是取出后删除）</param>
+        public StateGroup GetRequires(Node node, Allocator allocator, bool isPop = false)
+        {
+            var group = new StateGroup(1, allocator);
+            var nodeHash = node.HashCode;
+            for (var i = 0; i < _requireHashes.Length; i++)
+            {
+                var (aNodeHash, stateHash) = _requireHashes[i];
+                if (!aNodeHash.Equals(nodeHash)) continue;
+                group.Add(_states[stateHash]);
+                if (!isPop) continue;
+                _requireHashes.RemoveAt(i);    //不能用SwapBack，因为不按顺序的话，行为执行会变怪
+                i--;
+            }
+
+            return group;
+        }
+
+        /// <summary>
+        /// 将一组state全部加入到某一个node的require中
+        /// </summary>
+        /// <param name="states"></param>
+        /// <param name="nodeHash"></param>
+        /// <returns></returns>
+        public void AddRequires(StateGroup states, int nodeHash)
+        {
+            for (var i = 0; i < states.Length(); i++)
+            {
+                var state = states[i];
+                var stateHash = state.GetHashCode();
+                _states.TryAdd(stateHash, state);
+                _requireHashes.Add(new ZephyrValueTuple<int,int>(nodeHash, stateHash));
+            }
+        }
+        
+        /// <summary>
+        /// 将一组state全部加入到某一个node的delta中
+        /// </summary>
+        /// <param name="states"></param>
+        /// <param name="nodeHash"></param>
+        /// <returns></returns>
+        public void AddDeltas(StateGroup states, int nodeHash)
+        {
+            for (var i = 0; i < states.Length(); i++)
+            {
+                var state = states[i];
+                var stateHash = state.GetHashCode();
+                _states.TryAdd(stateHash, state);
+                _deltaHashes.Add(new ZephyrValueTuple<int,int>(nodeHash, stateHash));
+            }
+        }
+        
+        /// <summary>
+        /// 读取指定node组的所有delta
         /// </summary>
         /// <param name="nodes"></param>
         /// <param name="outStates"></param>
         /// <param name="allocator"></param>
-        public void GetNodeStates(ref NativeList<Node> nodes,
-            out NativeList<ValueTuple<int, State>> outStates, Allocator allocator)
+        public void GetDeltas(NativeList<Node> nodes,
+            out NativeList<ZephyrValueTuple<int, State>> outStates, Allocator allocator)
         {
-            outStates = new NativeList<ValueTuple<int, State>>(allocator);
+            outStates = new NativeList<ZephyrValueTuple<int, State>>(allocator);
             
             for (var i = 0; i < nodes.Length; i++)
             {
                 var nodeHash = nodes[i].HashCode;
-                for (var j = 0; j < _nodeStates.Length; j++)
+                for (var stateHashId = 0; stateHashId < _deltaHashes.Length; stateHashId++)
                 {
-                    var (hash, _) = _nodeStates[j];
-                    if (!hash.Equals(nodeHash)) continue;
-                    outStates.Add(_nodeStates[j]);
+                    var (aNodeHash, stateHash) = _deltaHashes[stateHashId];
+                    if (!aNodeHash.Equals(nodeHash)) continue;
+                    outStates.Add(new ZephyrValueTuple<int,State>(nodeHash, _states[stateHash]));
                 }
             }
         }
-
-        /// <summary>
-        /// 读取指定node的所有state到StateGroup中
-        /// </summary>
-        /// <param name="node"></param>
-        /// <param name="allocator"></param>
-        public StateGroup GetNodeStates(Node node, Allocator allocator)
-        {
-            var group = new StateGroup(1, allocator);
-            var nodeHash = node.HashCode;
-            for (var i = 0; i < _nodeStates.Length; i++)
-            {
-                var (hash, state) = _nodeStates[i];
-                if (!hash.Equals(nodeHash)) continue;
-                group.Add(state);
-            }
-
-            return group;
-        }
         
-        public State[] GetNodeStates(Node node)
+        public State[] GetStates(Node node)
         {
             var result = new List<State>();
             var nodeHash = node.HashCode;
-            for (var i = 0; i < _nodeStates.Length; i++)
+            for (var i = 0; i < _deltaHashes.Length; i++)
             {
-                var (hash, state) = _nodeStates[i];
-                if (!hash.Equals(nodeHash)) continue;
-                result.Add(state);
+                var (aNodeHash, stateHash) = _requireHashes[i];
+                if (!aNodeHash.Equals(nodeHash)) continue;
+                result.Add(_states[stateHash]);
             }
 
             return result.ToArray();
         }
         
-        public StateGroup GetNodePreconditions(Node node, Allocator allocator)
+        public StateGroup GetPreconditions(Node node, Allocator allocator)
         {
             var group = new StateGroup(1, allocator);
             var nodeHash = node.HashCode;
-            for (var i = 0; i < _preconditions.Length; i++)
+            for (var i = 0; i < _preconditionHashes.Length; i++)
             {
-                var (hash, precondition) = _preconditions[i];
-                if (!hash.Equals(nodeHash)) continue;
-                group.Add(precondition);
+                var (aNodeHash, preconditionHash) = _preconditionHashes[i];
+                if (!aNodeHash.Equals(nodeHash)) continue;
+                group.Add(_states[preconditionHash]);
             }
 
             return group;
         }
-        
-        public State[] GetNodePreconditions(Node node)
-        {
-            var result = new List<State>();
-            var nodeHash = node.HashCode;
-            for (var i = 0; i < _preconditions.Length; i++)
-            {
-                var (hash, precondition) = _preconditions[i];
-                if (!hash.Equals(nodeHash)) continue;
-                result.Add(precondition);
-            }
 
-            return result.ToArray();
-        }
-        
-        public StateGroup GetNodeEffects(Node node, Allocator allocator)
+        public StateGroup GetEffects(Node node, Allocator allocator)
         {
             var group = new StateGroup(1, allocator);
             var nodeHash = node.HashCode;
-            for (var i = 0; i < _effects.Length; i++)
+            for (var i = 0; i < _effectHashes.Length; i++)
             {
-                var (hash, state) = _effects[i];
-                if (!hash.Equals(nodeHash)) continue;
-                group.Add(state);
+                var (aNodeHash, effectHash) = _effectHashes[i];
+                if (!nodeHash.Equals(aNodeHash)) continue;
+                group.Add(_states[effectHash]);
             }
 
             return group;
-        }
-        
-        public State[] GetNodeEffects(Node node)
-        {
-            var result = new List<State>();
-            var nodeHash = node.HashCode;
-            for (var i = 0; i < _effects.Length; i++)
-            {
-                var (hash, effect) = _effects[i];
-                if (!hash.Equals(nodeHash)) continue;
-                result.Add(effect);
-            }
-
-            return result.ToArray();
         }
 
         public NativeList<int> GetChildren(int hash, Allocator allocator)
@@ -295,12 +338,12 @@ namespace Zephyr.GOAP.Struct
 
         public Node GetStartNode()
         {
-            return _nodes[_startNodeHash];
+            return _nodes[StartNodeHash];
         }
 
         public Node GetGoalNode()
         {
-            return _nodes[_goalNodeHash];
+            return _nodes[GoalNodeHash];
         }
 
         public void RemoveConnection(int childHash, int parentHash)
@@ -314,18 +357,100 @@ namespace Zephyr.GOAP.Struct
                 return;
             }
         }
-
-        public void RemoveNodeState(Node node, State state)
+        
+        public State[] GetPreconditions(Node node)
         {
+            return GetStates(_preconditionHashes, node);
+        }
+        
+        public State[] GetEffects(Node node)
+        {
+            return GetStates(_effectHashes, node);
+        }
+        
+        public State[] GetRequires(Node node)
+        {
+            return GetStates(_requireHashes, node);
+        }
+        
+        public State[] GetDeltas(Node node)
+        {
+            return GetStates(_deltaHashes, node);
+        }
+
+        private State[] GetStates(NativeList<ZephyrValueTuple<int, int>> container, Node node)
+        {
+            var result = new List<State>();
             var nodeHash = node.HashCode;
-            for (var i = 0; i < _nodeStates.Length; i++)
+            for (var i = 0; i < container.Length; i++)
             {
-                var (hash, aState) = _nodeStates[i];
-                if (!hash.Equals(nodeHash)) continue;
-                if (!aState.Equals(state)) continue;
-                _nodeStates.RemoveAtSwapBack(i);
-                break;
+                var (aNodeHash, stateHash) = container[i];
+                if (!aNodeHash.Equals(nodeHash)) continue;
+                result.Add(_states[stateHash]);
             }
+
+            return result.ToArray();
+        }
+        
+        public NativeList<State> GetRequires(Node node, Allocator allocator)
+        {
+            return GetStates(_requireHashes, node, allocator);
+        }
+        
+        public NativeList<State> GetDeltas(Node node, Allocator allocator)
+        {
+            return GetStates(_deltaHashes, node, allocator);
+        }
+
+        private NativeList<State> GetStates(NativeList<ZephyrValueTuple<int, int>> container, Node node, Allocator allocator)
+        {
+            var list = new NativeList<State>(allocator);
+            var nodeHash = node.HashCode;
+            for (var i = 0; i < container.Length; i++)
+            {
+                var (aNodeHash, stateHash) = container[i];
+                if (!aNodeHash.Equals(nodeHash)) continue;
+                list.Add(_states[stateHash]);
+            }
+            
+            return list;
+        }
+
+        public NativeList<ZephyrValueTuple<int, State>> GetRequires(NativeList<Node> nodes,
+            Allocator allocator)
+        {
+            return GetStates(_requireHashes, nodes, allocator);
+        }
+        
+        public NativeList<ZephyrValueTuple<int, State>> GetDeltas(NativeList<Node> nodes,
+            Allocator allocator)
+        {
+            return GetStates(_deltaHashes, nodes, allocator);
+        }
+
+        /// <summary>
+        /// 读取指定node组的所有state
+        /// </summary>
+        /// <param name="container"></param>
+        /// <param name="nodes"></param>
+        /// <param name="allocator"></param>
+        private NativeList<ZephyrValueTuple<int, State>> GetStates(NativeList<ZephyrValueTuple<int, int>> container, NativeList<Node> nodes,
+            Allocator allocator)
+        {
+            var result = new NativeList<ZephyrValueTuple<int, State>>(allocator);
+            
+            for (var i = 0; i < nodes.Length; i++)
+            {
+                var nodeHash = nodes[i].HashCode;
+                for (var stateHashId = 0; stateHashId < container.Length; stateHashId++)
+                {
+                    var (aNodeHash, stateHash) = container[stateHashId];
+                    if (!aNodeHash.Equals(nodeHash)) continue;
+                    result.Add(new ZephyrValueTuple<int,State>(nodeHash, _states[stateHash]));
+                }
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -335,23 +460,24 @@ namespace Zephyr.GOAP.Struct
         /// <param name="node"></param>
         public void CleanAllDuplicateStates(Node node)
         {
-            CleanDuplicateStates(_preconditions, node);
-            CleanDuplicateStates(_effects, node);
-            CleanDuplicateStates(_nodeStates, node);
+            CleanDuplicateStates(_preconditionHashes, node);
+            CleanDuplicateStates(_effectHashes, node);
+            CleanDuplicateStates(_requireHashes, node);
+            CleanDuplicateStates(_deltaHashes, node);
         }
         
-        private void CleanDuplicateStates(NativeList<ValueTuple<int, State>> container, Node node)
+        private void CleanDuplicateStates(NativeList<ZephyrValueTuple<int, int>> container, Node node)
         {
             var nodeHash = node.HashCode;
             for (var baseId = 0; baseId < container.Length; baseId++)
             {
-                var (hash, state) = container[baseId];
-                if (!hash.Equals(nodeHash)) continue;
+                var (key, value) = container[baseId];
+                if (!key.Equals(nodeHash)) continue;
                 for (var otherId = baseId+1; otherId < container.Length; otherId++)
                 {
-                    var (otherHash, otherState) = container[otherId];
-                    if (!hash.Equals(otherHash)) continue;
-                    if (!state.Equals(otherState)) continue;
+                    var (otherKey, otherValue) = container[otherId];
+                    if (!key.Equals(otherKey)) continue;
+                    if (!value.Equals(otherValue)) continue;
                     container.RemoveAtSwapBack(otherId);
                     otherId--;
                 }
@@ -369,9 +495,12 @@ namespace Zephyr.GOAP.Struct
             _nodes.Dispose();
 
             _nodeToParents.Dispose();
-            _nodeStates.Dispose();
-            _preconditions.Dispose();
-            _effects.Dispose();
+
+            _states.Dispose();
+            _effectHashes.Dispose();
+            _preconditionHashes.Dispose();
+            _requireHashes.Dispose();
+            _deltaHashes.Dispose();
 
             _deadEndNodeHashes.Dispose();
         }

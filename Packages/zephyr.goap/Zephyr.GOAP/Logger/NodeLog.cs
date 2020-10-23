@@ -26,7 +26,7 @@ namespace Zephyr.GOAP.Logger
 
         public EntityLog agentExecutorEntity, navigationSubject;
 
-        public StateLog[] states, preconditions, effects;
+        public StateLog[] requires, preconditions, effects, deltas;
 
         public bool isPath;
         
@@ -44,16 +44,19 @@ namespace Zephyr.GOAP.Logger
 
         public Entity pathNodeEntity;
 
-        public NodeLog(ref NodeGraph nodeGraph, EntityManager entityManager, Node node)
+        public NodeLog(NodeGraph nodeGraph, EntityManager entityManager, Node node)
         {
             name = node.Name.ToString();
             iteration = node.Iteration;
             reward = node.Reward;
             navigationSubject = new EntityLog(entityManager, node.NavigatingSubject);
             agentExecutorEntity = new EntityLog(entityManager, node.AgentExecutorEntity);
-            states = StateLog.CreateStateLogs(entityManager, nodeGraph.GetNodeStates(node));
-            preconditions = StateLog.CreateStateLogs(entityManager, nodeGraph.GetNodePreconditions(node));
-            effects = StateLog.CreateStateLogs(entityManager, nodeGraph.GetNodeEffects(node));
+            
+            preconditions = StateLog.CreateStateLogs(entityManager, nodeGraph.GetPreconditions(node));
+            effects = StateLog.CreateStateLogs(entityManager, nodeGraph.GetEffects(node));
+            requires = StateLog.CreateStateLogs(entityManager, nodeGraph.GetRequires(node));
+            deltas = StateLog.CreateStateLogs(entityManager, nodeGraph.GetDeltas(node));
+            
             if (
                 name.Equals("CookAction") &&
                 effects.Length == 2)
@@ -75,8 +78,8 @@ namespace Zephyr.GOAP.Logger
         }
 
         public void SetSpecifiedPreconditions(EntityManager entityManager,
-            ref NativeList<int> pathNodeSpecifiedPreconditionIndices,
-            ref NativeList<State> pathNodeSpecifiedPreconditions)
+            NativeList<int> pathNodeSpecifiedPreconditionIndices,
+            NativeList<State> pathNodeSpecifiedPreconditions)
         {
             if (!isPath) return;
             
@@ -97,13 +100,14 @@ namespace Zephyr.GOAP.Logger
         /// <returns></returns>
         public string[] NodeAgentInfos()
         {
-            var sorted = new SortedSet<NodeAgentInfoLog>(nodeAgentInfos);
             var texts = new List<string>();
+            if (nodeAgentInfos == null) return texts.ToArray();
+            
+            var sorted = new SortedSet<NodeAgentInfoLog>(nodeAgentInfos);
             foreach (var log in sorted)
             {
                 texts.Add(log.ToString());
             }
-
             return texts.ToArray();
         }
     }

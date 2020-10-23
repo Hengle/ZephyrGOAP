@@ -2,7 +2,7 @@ using Unity.Entities;
 using UnityEngine;
 using Zephyr.GOAP.Component;
 using Zephyr.GOAP.Component.GoalManage;
-using Zephyr.GOAP.Component.GoalManage.GoalState;
+using Zephyr.GOAP.Component.GoalState;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
 using Zephyr.GOAP.Struct;
 
@@ -33,20 +33,20 @@ namespace Zephyr.GOAP.Sample.Game
                 }
                 entities.Dispose();
                 
-                var goalState = new State
+                var require = new State
                 {
                     // Target = cookerEntity,
                     // Position = entityManager.GetComponentData<Translation>(cookerEntity).Value,
-                    // Trait = typeof(ItemSourceTrait),
+                    // Trait = TypeManager.GetTypeIndex<ItemSourceTrait>(),
                     // ValueString = "feast"
                     Target = agentAEntity,
-                    Trait = typeof(StaminaTrait),
+                    Trait = TypeManager.GetTypeIndex<StaminaTrait>(),
                 };
                 
                 entityManager.AddComponentData(goalEntity, new Goal
                 {
                     GoalEntity = goalEntity,
-                    State = goalState,
+                    Require = require,
                     Priority = Priority.Normal,
                     CreateTime = 0
                 });

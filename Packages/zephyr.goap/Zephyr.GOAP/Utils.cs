@@ -2,7 +2,7 @@ using System;
 using Unity.Entities;
 using Zephyr.GOAP.Component.ActionNodeState;
 using Zephyr.GOAP.Component.AgentState;
-using Zephyr.GOAP.Component.GoalManage.GoalState;
+using Zephyr.GOAP.Component.GoalState;
 
 namespace Zephyr.GOAP
 {
@@ -20,7 +20,7 @@ namespace Zephyr.GOAP
         /// <typeparam name="T">离开的状态</typeparam>
         /// <typeparam name="TU">进入的状态</typeparam>
         public static void NextAgentState<T, TU>(Entity agentEntity, int jobIndex,
-            ref EntityCommandBuffer.Concurrent eCBuffer, Entity nodeEntity) 
+            EntityCommandBuffer.ParallelWriter eCBuffer, Entity nodeEntity) 
             where T : struct, IComponentData, IAgentState where TU : struct, IComponentData, IAgentState
         {
             eCBuffer.RemoveComponent<T>(jobIndex, agentEntity);
@@ -36,7 +36,7 @@ namespace Zephyr.GOAP
         }
         
         public static void NextAgentState<T, TU>(Entity agentEntity,
-            ref EntityCommandBuffer eCBuffer, Entity nodeEntity) 
+            EntityCommandBuffer eCBuffer, Entity nodeEntity) 
             where T : struct, IComponentData, IAgentState where TU : struct, IComponentData, IAgentState
         {
             eCBuffer.RemoveComponent<T>(agentEntity);
@@ -51,7 +51,7 @@ namespace Zephyr.GOAP
         }
         
         public static void NextActionNodeState<T, TU>(Entity actionNodeEntity, int jobIndex,
-            ref EntityCommandBuffer.Concurrent eCBuffer, Entity agentEntity) 
+            EntityCommandBuffer.ParallelWriter eCBuffer, Entity agentEntity) 
             where T : struct, IComponentData, IActionNodeState where TU : struct, IComponentData, IActionNodeState
         {
             eCBuffer.RemoveComponent<T>(jobIndex, actionNodeEntity);

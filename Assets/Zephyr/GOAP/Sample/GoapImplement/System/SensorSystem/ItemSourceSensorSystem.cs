@@ -1,13 +1,10 @@
-using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Transforms;
 using Zephyr.GOAP.Component;
 using Zephyr.GOAP.Sample.Game.Component;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
-using Zephyr.GOAP.Struct;
-using Zephyr.GOAP.System;
+using Zephyr.GOAP.System.SensorManage;
 
 namespace Zephyr.GOAP.Sample.GoapImplement.System.SensorSystem
 {
@@ -15,45 +12,30 @@ namespace Zephyr.GOAP.Sample.GoapImplement.System.SensorSystem
     /// 探测所有可拿取的物品容器的物品情况
     /// todo 可以考虑下是否有必要优化为只记录离agent最近的，节省内存牺牲运算
     /// </summary>
-    [UpdateInGroup(typeof(SensorSystemGroup))]
-    public class ItemSourceSensorSystem : JobComponentSystem
+    public class ItemSourceSensorSystem : SensorSystemBase
     {
-        [RequireComponentTag(typeof(ItemContainerTrait))]
-        private struct SenseJob : IJobForEachWithEntity_EBCC<ContainedItemRef, ItemContainer, Translation>
+        protected override JobHandle ScheduleSensorJob(JobHandle inputDeps,
+            EntityCommandBuffer.ParallelWriter ecb, Entity baseStateEntity)
         {
-            [NativeDisableContainerSafetyRestriction, WriteOnly]
-            public BufferFromEntity<State> States;
-
-            public Entity CurrentStatesEntity;
-
-            public void Execute(Entity entity, int jobIndex,
-                DynamicBuffer<ContainedItemRef> itemRefs, ref ItemContainer container, ref Translation translation)
-            {
-                if (!container.IsTransferSource) return;
-
-                var buffer = States[CurrentStatesEntity];
-                foreach (var itemRef in itemRefs)
+            return Entities.WithAll<ItemContainerTrait>()
+                .ForEach((Entity itemContainerEntity, int entityInQueryIndex,
+                    DynamicBuffer<ContainedItemRef> itemRefs,
+                    in ItemContainer itemContainer, in Translation translation) =>
                 {
-                    buffer.Add(new State
+                    if (!itemContainer.IsTransferSource) return;
+
+                    for (var i = 0; i < itemRefs.Length; i++)
                     {
-                        Target = entity,
-                        Position = translation.Value,
-                        Trait = typeof(ItemContainerTrait),
-                        ValueString = itemRef.ItemName
-                    });
-                }
-            }
-        }
-        
-        protected override JobHandle OnUpdate(JobHandle inputDeps)
-        {
-            var job = new SenseJob
-            {
-                States = GetBufferFromEntity<State>(),
-                CurrentStatesEntity = CurrentStatesHelper.CurrentStatesEntity
-            };
-            var handle = job.Schedule(this, inputDeps);
-            return handle;
+                        var itemRef = itemRefs[i];
+                        ecb.AppendToBuffer(entityInQueryIndex, baseStateEntity, new State
+                        {
+                            Target = itemContainerEntity,
+                            Position = translation.Value,
+                            Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
+                            ValueString = itemRef.ItemName
+                        });
+                    }
+                }).Schedule(inputDeps);
         }
     }
 }

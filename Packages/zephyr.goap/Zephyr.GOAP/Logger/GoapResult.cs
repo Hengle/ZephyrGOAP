@@ -16,7 +16,7 @@ namespace Zephyr.GOAP.Logger
 
         public List<EdgeLog> edges;
 
-        public List<StateLog> currentStates;
+        public List<StateLog> baseStates;
 
         public string timeStart;
         
@@ -30,6 +30,8 @@ namespace Zephyr.GOAP.Logger
 
         public List<NodeDependencyLog> pathDependencies;
 
+        public bool isPlanSuccess;
+
         public void StartLog(EntityManager entityManager)
         {
             _timeStart = DateTime.Now;
@@ -37,17 +39,23 @@ namespace Zephyr.GOAP.Logger
             
             nodes = new List<NodeLog>();
             edges = new List<EdgeLog>();
-            currentStates = new List<StateLog>();
+            baseStates = new List<StateLog>();
             pathDependencies = new List<NodeDependencyLog>();
         }
         
-        public void SetNodeGraph(ref NodeGraph nodeGraph, EntityManager entityManager)
+        public void SetNodeGraph(NodeGraph nodeGraph, EntityManager entityManager)
         {
             //转换所有node
             var nodesData = nodeGraph.GetNodes(Allocator.Temp);
             foreach (var node in nodesData)
             {
-                nodes.Add(new NodeLog(ref nodeGraph, entityManager, node));
+                var nodeLog = new NodeLog(nodeGraph, entityManager, node);
+                if (node.HashCode.Equals(nodeGraph.StartNodeHash) ||
+                    node.HashCode.Equals(nodeGraph.GoalNodeHash))
+                {
+                    nodeLog.isPath = true;
+                }
+                nodes.Add(nodeLog);
             }
             //转换所有edge
             var edgesData = nodeGraph.GetEdges(Allocator.Temp);
@@ -62,7 +70,7 @@ namespace Zephyr.GOAP.Logger
         }
 
         public void SetPathResult(EntityManager entityManager,
-            ref NativeArray<Entity> pathEntities, ref NativeList<Node> pathNodes)
+            NativeArray<Entity> pathEntities, NativeList<Node> pathNodes)
         {
             _pathHash = new int[pathNodes.Length];
             for (var i = 0; i < pathNodes.Length; i++)
@@ -97,17 +105,17 @@ namespace Zephyr.GOAP.Logger
         }
 
         public void SetSpecifiedPreconditions(EntityManager entityManager,
-            ref NativeList<int> pathNodeSpecifiedPreconditionIndices,
-            ref NativeList<State> pathNodeSpecifiedPreconditions)
+            NativeList<int> pathNodeSpecifiedPreconditionIndices,
+            NativeList<State> pathNodeSpecifiedPreconditions)
         {
             foreach (var nodeLog in nodes)
             {
                 nodeLog.SetSpecifiedPreconditions(entityManager,
-                    ref pathNodeSpecifiedPreconditionIndices, ref pathNodeSpecifiedPreconditions);
+                    pathNodeSpecifiedPreconditionIndices, pathNodeSpecifiedPreconditions);
             }
         }
 
-        public void SetNodeAgentInfos(EntityManager entityManager, ref NativeMultiHashMap<int, NodeAgentInfo> nodeTimes)
+        public void SetNodeAgentInfos(EntityManager entityManager, NativeMultiHashMap<int, NodeAgentInfo> nodeTimes)
         {
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -121,7 +129,7 @@ namespace Zephyr.GOAP.Logger
             }
         }
 
-        public void SetNodeTotalTimes(ref NativeHashMap<int, float> nodeTotalTimes)
+        public void SetNodeTotalTimes(NativeHashMap<int, float> nodeTotalTimes)
         {
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -131,15 +139,15 @@ namespace Zephyr.GOAP.Logger
             }
         }
 
-        public void SetCurrentStates(ref StateGroup currentStates, EntityManager entityManager)
+        public void SetBaseStates(StateGroup baseStates, EntityManager entityManager)
         {
-            foreach (var currentState in currentStates)
+            foreach (var baseState in baseStates)
             {
-                this.currentStates.Add(new StateLog(entityManager, currentState));
+                this.baseStates.Add(new StateLog(entityManager, baseState));
             }
         }
 
-        public void SetRewardSum(ref NativeHashMap<int, float> rewardSum)
+        public void SetRewardSum(NativeHashMap<int, float> rewardSum)
         {
             for (var i = 0; i < nodes.Count; i++)
             {
@@ -183,6 +191,11 @@ namespace Zephyr.GOAP.Logger
         public NodeLog GetGoalNodeLog()
         {
             return nodes.Find(log => log.hashCode == _goalNodeHash);
+        }
+
+        public void SetPlanSuccess(bool isSuccess)
+        {
+            isPlanSuccess = isSuccess;
         }
     }
 }

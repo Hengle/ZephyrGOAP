@@ -1,13 +1,13 @@
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Sample.Game.Component;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
 using Zephyr.GOAP.Struct;
-using Zephyr.GOAP.System;
+using Zephyr.GOAP.System.SensorManage;
 
 namespace Zephyr.GOAP.Sample.GoapImplement.System.SensorSystem
 {
@@ -15,70 +15,84 @@ namespace Zephyr.GOAP.Sample.GoapImplement.System.SensorSystem
     /// 检测世界里的Collector，写入其存在
     /// 并且检测范围内的原料以写入潜在物品
     /// </summary>
-    [UpdateInGroup(typeof(SensorSystemGroup))]
     [UpdateAfter(typeof(RawSourceSensorSystem))]
-    public class CollectorSensorSystem : JobComponentSystem
+    public class CollectorSensorSystem : SensorSystemBase
     {
         //todo 示例固定数值
         public const float CollectorRange = 100;
-        
-        [RequireComponentTag(typeof(CollectorTrait))]
-        private struct SenseJob : IJobForEachWithEntity_EC<Translation>
+
+        private EntityQuery _rawQuery;
+
+        protected override void OnCreate()
         {
-            public float CollectorRange;
-            
-            [NativeDisableContainerSafetyRestriction]
-            public BufferFromEntity<State> States;
-
-            public Entity CurrentStatesEntity;
-            
-            public void Execute(Entity entity, int jobIndex, ref Translation translation)
-            {
-                var buffer = States[CurrentStatesEntity];
-                var position = translation.Value;
-                var rawSourceStates = new StateGroup(3, Allocator.Temp);
-                
-                //准备出本collector附近的原料
-                for (var i = 0; i < buffer.Length; i++)
-                {
-                    var state = buffer[i];
-                    if (state.Trait != typeof(RawSourceTrait)) continue;
-                    if (math.distance(state.Position, position) > CollectorRange) continue;
-                    rawSourceStates.Add(state);
-                }
-
-                //写入collector
-                buffer.Add(new State
-                {
-                    Target = entity,
-                    Position = position,
-                    Trait = typeof(CollectorTrait),
-                });
-                //基于附近原料，写入潜在物品源
-                for (var i = 0; i < rawSourceStates.Length(); i++)
-                {
-                    buffer.Add(new State
-                    {
-                        Target = entity,
-                        Trait = typeof(ItemPotentialSourceTrait),
-                        ValueString = rawSourceStates[i].ValueString
-                    });
-                }
-                
-                rawSourceStates.Dispose();
-            }
+            base.OnCreate();
+            _rawQuery = GetEntityQuery(
+                ComponentType.ReadOnly<RawSourceTrait>(),
+                ComponentType.ReadOnly<Translation>(),
+                ComponentType.ReadOnly<ContainedItemRef>());
         }
-        
-        protected override JobHandle OnUpdate(JobHandle inputDeps)
+
+        protected override JobHandle ScheduleSensorJob(JobHandle inputDeps,
+            EntityCommandBuffer.ParallelWriter ecb, Entity baseStateEntity)
         {
-            var job = new SenseJob
-            {
-                CollectorRange = CollectorRange,
-                States = GetBufferFromEntity<State>(),
-                CurrentStatesEntity = CurrentStatesHelper.CurrentStatesEntity
-            };
-            var handle = job.Schedule(this, inputDeps);
-            return handle;
+            var rawEntities = _rawQuery.ToEntityArray(Allocator.TempJob);
+            var raws = _rawQuery.ToComponentDataArray<RawSourceTrait>(Allocator.TempJob);
+            var rawTranslations = _rawQuery.ToComponentDataArray<Translation>(Allocator.TempJob);
+            var counts = GetComponentDataFromEntity<Count>(true);
+            var containedItemRefs = GetBufferFromEntity<ContainedItemRef>(true);
+            
+            return Entities.WithAll<CollectorTrait>()
+                .WithReadOnly(raws)
+                .WithReadOnly(rawTranslations)
+                .WithReadOnly(counts)
+                .WithReadOnly(containedItemRefs)
+                .WithDisposeOnCompletion(rawEntities)
+                .WithDisposeOnCompletion(raws)
+                .WithDisposeOnCompletion(rawTranslations)
+                .ForEach(
+                    (Entity collectorEntity, int entityInQueryIndex, in Translation translation) =>
+                    {
+                        var position = translation.Value;
+
+                        //写入collector
+                        ecb.AppendToBuffer(entityInQueryIndex, baseStateEntity, new State
+                        {
+                            Target = collectorEntity,
+                            Position = position,
+                            Trait = TypeManager.GetTypeIndex<CollectorTrait>(),
+                        });
+
+                        //基于附近原料，写入潜在物品源
+                        var tempStates = new StateGroup(1, Allocator.Temp);
+                        for (var rawId = 0; rawId < raws.Length; rawId++)
+                        {
+                            if (math.distance(rawTranslations[rawId].Value, position) > CollectorRange) continue;
+
+                            //找到raw的物品容器里的那个物品以确定数量
+                            var bufferContainedItemRef = containedItemRefs[rawEntities[rawId]];
+                            var itemEntity = bufferContainedItemRef[0].ItemEntity;
+
+                            var newState = new State
+                            {
+                                Target = collectorEntity,
+                                Position = position,
+                                Trait = TypeManager.GetTypeIndex<ItemPotentialSourceTrait>(),
+                                ValueString = raws[rawId].RawName,
+                                Amount = counts[itemEntity].Value
+                            };
+                            
+                            tempStates.OR(newState);
+                        }
+
+                        for (var i = 0; i < tempStates.Length(); i++)
+                        {
+                            var state = tempStates[i];
+                            ecb.AppendToBuffer(entityInQueryIndex, baseStateEntity, state);
+                        }
+                        
+                        tempStates.Dispose();
+                        
+                    }).Schedule(inputDeps);;
         }
     }
 }

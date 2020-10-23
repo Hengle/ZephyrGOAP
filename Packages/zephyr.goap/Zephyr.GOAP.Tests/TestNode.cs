@@ -9,22 +9,22 @@ namespace Zephyr.GOAP.Tests
 {
     public class TestNode : TestBase
     {
-        private StateGroup _states0, _states1;
+        private StateGroup _requires0, _requires1;
         
         [SetUp]
         public override void SetUp()
         {
             base.SetUp();
-            _states0 = new StateGroup(1, Allocator.Temp){new State
+            _requires0 = new StateGroup(1, Allocator.Temp){new State
             {
                 Target = Entity.Null,
-                Trait = typeof(MockTraitA),
+                Trait = TypeManager.GetTypeIndex<MockTraitA>(),
                 ValueString = "test",
             }};
-            _states1 = new StateGroup(1, Allocator.Temp){new State
+            _requires1 = new StateGroup(1, Allocator.Temp){new State
             {
                 Target = Entity.Null,
-                Trait = typeof(MockTraitA),
+                Trait = TypeManager.GetTypeIndex<MockTraitA>(),
                 ValueString = "test",
             }};
         }
@@ -33,8 +33,8 @@ namespace Zephyr.GOAP.Tests
         public override void TearDown()
         {
             base.TearDown();
-            _states0.Dispose();
-            _states1.Dispose();
+            _requires0.Dispose();
+            _requires1.Dispose();
         }
 
         //state一样的node应当具有一致hashcode并equal
@@ -43,32 +43,32 @@ namespace Zephyr.GOAP.Tests
         {
             var nonPrecondition = new StateGroup();
             var nonEffect = new StateGroup();
-            var node0 = new Node(ref nonPrecondition, ref nonEffect, ref _states0,
+            var nonDelta = new StateGroup();
+            var node0 = new Node(nonPrecondition, nonEffect, _requires0, nonDelta,
                 "node0", 0, 0, 0, Entity.Null);
-            var node1 = new Node(ref nonPrecondition, ref nonEffect, ref _states1,
+            var node1 = new Node(nonPrecondition, nonEffect, _requires1, nonDelta,
                 "node1", 0, 0, 0, Entity.Null);
             
-            Assert.AreEqual(node1, node0);
             Assert.IsTrue(node0.Equals(node1));
         }
 
         [Test]
         public void DifferentState_NodesNotEqual()
         {
-            _states1.Add(new State{
+            _requires1.Add(new State{
                 Target = Entity.Null,
-                Trait = typeof(MockTraitB),
+                Trait = TypeManager.GetTypeIndex<MockTraitB>(),
                 ValueString = "test",
             });
             
             var nonPrecondition = new StateGroup();
             var nonEffect = new StateGroup();
-            var node0 = new Node(ref nonPrecondition, ref nonEffect, ref _states0,
+            var nonDelta = new StateGroup();
+            var node0 = new Node(nonPrecondition, nonEffect, _requires0, nonDelta,
                 "node0", 0, 0, 0, Entity.Null);
-            var node1 = new Node(ref nonPrecondition, ref nonEffect, ref _states1,
+            var node1 = new Node(nonPrecondition, nonEffect, _requires1, nonDelta,
                 "node1", 0, 0, 0, Entity.Null);
             
-            Assert.AreNotEqual(node1, node0);
             Assert.IsFalse(node0.Equals(node1));
         }
     }

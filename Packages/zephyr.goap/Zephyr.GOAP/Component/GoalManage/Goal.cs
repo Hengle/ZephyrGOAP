@@ -7,7 +7,7 @@ namespace Zephyr.GOAP.Component.GoalManage
     public struct Goal : IComponentData, IComparable<Goal>
     {
         public Entity GoalEntity;
-        public State State;
+        public State Require;
         public Priority Priority;
         public double CreateTime;
         /// <summary>
@@ -17,7 +17,7 @@ namespace Zephyr.GOAP.Component.GoalManage
         /// <summary>
         /// 预计执行时长
         /// </summary>
-        public float EstimateTimeLength;
+        public float EstimatePeriod;
 
         public int CompareTo(Goal other)
         {

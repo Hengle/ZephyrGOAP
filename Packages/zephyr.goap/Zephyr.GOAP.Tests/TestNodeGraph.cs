@@ -20,16 +20,16 @@
 //             var goalStates = new StateGroup(1, Allocator.Temp){new State
 //             {
 //                 Target = Entity.Null,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             }};
 //             var goalPreconditions = new StateGroup();
 //             var goalEffects = new StateGroup();
-//             _goalNode = new Node(ref goalPreconditions, ref goalEffects, ref goalStates,
+//             _goalNode = new Node(goalPreconditions, goalEffects, goalStates,
 //                 new NativeString64("goal"), 0, 0, 0, Entity.Null);
 //             
 //             _nodeGraph = new NodeGraph(1, Allocator.Persistent);
-//             _nodeGraph.SetGoalNode(_goalNode, ref goalStates);
+//             _nodeGraph.SetGoalNode(_goalNode, goalStates);
 //             
 //             goalStates.Dispose();
 //         }

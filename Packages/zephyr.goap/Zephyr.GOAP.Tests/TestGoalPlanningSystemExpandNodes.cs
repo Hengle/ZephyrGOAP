@@ -19,7 +19,7 @@
 //         private NativeList<Node> _unexpandedNodes;
 //         private NativeList<Node> _expandedNodes;
 //         private NodeGraph _nodeGraph;
-//         private StateGroup _currentStates;
+//         private StateGroup _baseStates;
 //         private Node _goalNode;
 //         private StackData _stackData;
 //
@@ -40,30 +40,30 @@
 //             _expandedNodes = new NativeList<Node>(Allocator.Persistent);
 //             
 //             _nodeGraph = new NodeGraph(256, Allocator.Persistent);
-//             _currentStates = new StateGroup(1, Allocator.Persistent);
+//             _baseStates = new StateGroup(1, Allocator.Persistent);
 //             
 //             var goalStates = new StateGroup(1, Allocator.Temp){new State
 //             {
 //                 Target = _targetEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             }};
 //             var goalPreconditions = new StateGroup();
-//             _goalNode = new Node(ref goalPreconditions, ref goalStates, ref goalStates,
+//             _goalNode = new Node(goalPreconditions, goalStates, goalStates,
 //                 new NativeString64("goal"), 0, 0, 0, Entity.Null);
 //             
-//             _nodeGraph.SetGoalNode(_goalNode, ref goalStates);
+//             _nodeGraph.SetGoalNode(_goalNode, goalStates);
 //             
 //             _unexpandedNodes.Add(_goalNode);
 //             
-//             _currentStates.Add(new State
+//             _baseStates.Add(new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             });
 //             
-//             _stackData = new StackData{CurrentStates = _currentStates};
+//             _stackData = new StackData{BaseStates = _baseStates};
 //         }
 //
 //         [TearDown]
@@ -74,7 +74,7 @@
 //             _unexpandedNodes.Dispose();
 //             _expandedNodes.Dispose();
 //             _nodeGraph.Dispose();
-//             _currentStates.Dispose();
+//             _baseStates.Dispose();
 // //            _stackData.Dispose();
 //         }
 //         
@@ -84,8 +84,8 @@
 //         [Test]
 //         public void NewNodeIntoUnCheckedList()
 //         {
-//             _system.ExpandNodes(ref _unexpandedNodes, ref _stackData, ref _nodeGraph,
-//                 ref _uncheckedNodesWriter, ref _expandedNodes, 1);
+//             _system.ExpandNodes(_unexpandedNodes, _stackData, _nodeGraph,
+//                 _uncheckedNodesWriter, _expandedNodes, 1);
 //             
 //             Assert.AreEqual(2, _nodeGraph.Length());
 //             Assert.AreEqual(1, _uncheckedNodes.Count());
@@ -94,7 +94,7 @@
 //             Assert.AreEqual(new State
 //             {
 //                 Target = _agentEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             }, states[0]);
 //             
@@ -105,8 +105,8 @@
 //         [Test]
 //         public void OldNodeIntoExpandedList()
 //         {
-//             _system.ExpandNodes(ref _unexpandedNodes, ref _stackData, ref _nodeGraph,
-//                 ref _uncheckedNodesWriter, ref _expandedNodes, 1);
+//             _system.ExpandNodes(_unexpandedNodes, _stackData, _nodeGraph,
+//                 _uncheckedNodesWriter, _expandedNodes, 1);
 //             
 //             Assert.AreEqual(2, _nodeGraph.Length());
 //             Assert.AreEqual(1, _expandedNodes.Length);
@@ -116,7 +116,7 @@
 //             Assert.AreEqual(new State
 //             {
 //                 Target = _targetEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             }, states[0]);
 //             
@@ -127,8 +127,8 @@
 //         [Test]
 //         public void ClearUnExpandedList()
 //         {
-//             _system.ExpandNodes(ref _unexpandedNodes, ref _stackData, ref _nodeGraph,
-//                 ref _uncheckedNodesWriter, ref _expandedNodes, 1);
+//             _system.ExpandNodes(_unexpandedNodes, _stackData, _nodeGraph,
+//                 _uncheckedNodesWriter, _expandedNodes, 1);
 //             
 //             Assert.AreEqual(0, _unexpandedNodes.Length);
 //         }
@@ -139,8 +139,8 @@
 //         {
 //             EntityManager.RemoveComponent<DropItemAction>(_agentEntity);
 //             
-//             _system.ExpandNodes(ref _unexpandedNodes, ref _stackData, ref _nodeGraph,
-//                 ref _uncheckedNodesWriter, ref _expandedNodes, 1);
+//             _system.ExpandNodes(_unexpandedNodes, _stackData, _nodeGraph,
+//                 _uncheckedNodesWriter, _expandedNodes, 1);
 //             
 //             Assert.AreEqual(1, _nodeGraph.Length());
 //             Assert.AreEqual(1, _expandedNodes.Length);
@@ -151,7 +151,7 @@
 //             Assert.AreEqual(new State
 //             {
 //                 Target = _targetEntity,
-//                 Trait = typeof(ItemContainerTrait),
+//                 Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
 //                 ValueString = new NativeString64("test"),
 //             }, states[0]);
 //             

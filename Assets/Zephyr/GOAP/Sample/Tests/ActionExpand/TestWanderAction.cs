@@ -2,10 +2,11 @@ using NUnit.Framework;
 using Unity.Entities;
 using UnityEngine;
 using Zephyr.GOAP.Component;
+using Zephyr.GOAP.Sample.GoapImplement;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Action;
 using Zephyr.GOAP.Sample.GoapImplement.Component.Trait;
+using Zephyr.GOAP.Sample.GoapImplement.System;
 using Zephyr.GOAP.Sample.GoapImplement.System.SensorSystem;
-using Zephyr.GOAP.Struct;
 using Zephyr.GOAP.System;
 using Zephyr.GOAP.Tests;
 
@@ -15,7 +16,7 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
     /// 目标：wander
     /// 预期：规划出wander
     /// </summary>
-    public class TestWanderAction : TestActionExpandBase
+    public class TestWanderAction : TestActionExpandBase<GoalPlanningSystem>
     {
         [SetUp]
         public override void SetUp()
@@ -27,21 +28,21 @@ namespace Zephyr.GOAP.Sample.Tests.ActionExpand
             SetGoal(new State
             {
                 Target = _agentEntity,
-                Trait = typeof(WanderTrait),
+                Trait = TypeManager.GetTypeIndex<WanderTrait>(),
             });
 
-            //给CurrentStates写入假环境数据
-            var buffer = EntityManager.GetBuffer<State>(CurrentStatesHelper.CurrentStatesEntity);
+            //给BaseStates写入假环境数据
+            var buffer = EntityManager.GetBuffer<State>(BaseStatesHelper.BaseStatesEntity);
             buffer.Add(new State
             {
                 Target = _agentEntity,
-                Trait = typeof(ItemContainerTrait),
-                ValueString = Sample.Utils.RawPeachName,
+                Trait = TypeManager.GetTypeIndex<ItemContainerTrait>(),
+                ValueString = ItemNames.Instance().RawPeachName,
             });
             buffer.Add(new State
             {
                 Target = new Entity{Index = 9, Version = 1},
-                Trait = typeof(CookerTrait),
+                Trait = TypeManager.GetTypeIndex<CookerTrait>(),
             });
             var recipeSensorSystem = World.GetOrCreateSystem<RecipeSensorSystem>();
             recipeSensorSystem.Update();
